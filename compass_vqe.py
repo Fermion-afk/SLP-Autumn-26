@@ -7,6 +7,7 @@ from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
 from qiskit import transpile as qk_transpile
+from qiskit.primitives import StatevectorEstimator
 from qiskit_algorithms import VQE
 from qiskit_algorithms.optimizers import COBYLA, L_BFGS_B
 from qiskit.circuit import Parameter, QuantumCircuit
@@ -18,16 +19,14 @@ from qiskit_nature.second_q.drivers import PySCFDriver
 from qiskit_nature.second_q.problems import ElectronicStructureProblem
 from qiskit_nature.second_q.transformers import FreezeCoreTransformer
 
-# Qiskit Nature: second quantization and mapping
-from qiskit_nature.second_q.operators import FermionicOp
+# Second quantization and fermion-to-qubit mapping
 from qiskit_nature.second_q.mappers import JordanWignerMapper
 
-# Qiskit Nature: reference state and ansatz
+# Reference state and ansatz
 from qiskit_nature.second_q.circuit.library import HartreeFock, UCC
 
-# Qiskit Nature: ground-state solver interface
+# Ground-state solver interface
 from qiskit_nature.second_q.algorithms import GroundStateEigensolver
-
 
 # ---------------------------------------------------------------------------
 # S-type excitation definitions (fixed for BeH2 STO-3G frozen-core)
@@ -42,9 +41,7 @@ def _Sh_ex(num_spin_orbitals, num_particles):
         ((0,6),(2,7)),  ((0,7),(2,7)),  ((0,6),(3,7)),  ((0,7),(3,7)),
         ((0,6),(4,7)),  ((0,7),(4,7)),  ((0,6),(5,7)),  ((0,7),(5,7)),
         ((1,6),(2,7)),  ((1,7),(2,7)),  ((1,6),(3,7)),  ((1,7),(3,7)),
-        ((1,6),(4,7)),  ((1,7),(4,7)),  ((1,6),(5,7)),  ((1,7),(5,7)),
-    ]
-
+        ((1,6),(4,7)),  ((1,7),(4,7)),  ((1,6),(5,7)),  ((1,7),(5,7))]
 
 def _Sp_ex(num_spin_orbitals, num_particles):
     return [
@@ -63,80 +60,45 @@ def _Sp_ex(num_spin_orbitals, num_particles):
         ((1,8),(2,8)),  ((1,8),(2,9)),  ((1,8),(2,10)), ((1,8),(2,11)),
         ((1,8),(3,8)),  ((1,8),(3,9)),  ((1,8),(3,10)), ((1,8),(3,11)),
         ((1,8),(4,8)),  ((1,8),(4,9)),  ((1,8),(4,10)), ((1,8),(4,11)),
-        ((1,8),(5,8)),  ((1,8),(5,9)),  ((1,8),(5,10)), ((1,8),(5,11)),
-    ]
-
+        ((1,8),(5,8)),  ((1,8),(5,9)),  ((1,8),(5,10)), ((1,8),(5,11))]
 
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _run_vqe(pauli_op_list, init_state, qubit_op, optimizer, backend, initial_point):
-    ansatz = EvolvedOperatorAnsatz(pauli_op_list, initial_state=init_state)
-    vqe = VQE(ansatz, optimizer=optimizer, quantum_instance=backend,
-              initial_point=initial_point)
-    return vqe.compute_minimum_eigenvalue(qubit_op)
-
-
-def _build_pauli_ops(ucc_form, converter):
-    return [converter.convert(ex) for ex in ucc_form.excitation_ops()]
-
+def _build_pauli_ops(ucc_form, mapper):
+    """New: mapper.map(ex) instead of converter.convert(ex)"""
+    return [mapper.map(ex) for ex in ucc_form.excitation_ops()]
 
 # ---------------------------------------------------------------------------
 # Top-level worker functions (must be module-level for multiprocessing)
 # ---------------------------------------------------------------------------
 
 def _t2_screen_worker(args):
-    """
-    Single-parameter VQE for T2 screening.
-
-    Receives a pre-transpiled circuit from the main process.
-    QuantumInstance is created with skip_transpilation=True so VQE does NOT
-    re-compile the circuit — the main-process compilation is reused as-is.
-    COBYLA is used: gradient-free, no extra circuit evaluations for finite
-    differences, and fast convergence for a 1-D search.
-    Returns (index, energy, optimal_theta).
-    """
-    idx, transpiled_circ, qubit_op, shift = args
-    # include_custom=True → AerPauliExpectation: Aer evaluates ALL Pauli terms in
-    # one circuit run via save_expectation_value.  Without it, PauliExpectation
-    # runs one separate circuit per commuting Pauli group (~20-50 for BeH2),
-    # multiplying every energy evaluation by that factor.
-    qi     = QuantumInstance(Aer.get_backend('statevector_simulator'),
-                             pass_manager=PassManager(),
-                             bound_pass_manager=PassManager())
-    vqe    = VQE(transpiled_circ,
-                 optimizer=L_BFGS_B(maxfun=200_000, maxiter=10_000),
-                 quantum_instance=qi,
-                 include_custom=True,
-                 initial_point=np.array([0.0]))
+    cand_idx, transpiled_circ, qubit_op, shift = args
+    estimator = StatevectorEstimator()
+    vqe = VQE(estimator, transpiled_circ, L_BFGS_B(maxfun=200_000, maxiter=10_000), initial_point=np.array([0.0]))
     result = vqe.compute_minimum_eigenvalue(qubit_op)
-    return idx, float(np.real(result.eigenvalue)) + shift, float(result.optimal_point[0])
-
+    eigenvalue = result.eigenvalue
+    if eigenvalue is None:
+        raise RuntimeError("VQE did not return an eigenvalue")
+    optimal_point = result.optimal_point
+    if optimal_point is None:
+        raise RuntimeError("VQE did not return an optimal point")
+    return cand_idx, float(np.real(eigenvalue)) + shift, float(np.asarray(optimal_point).reshape(-1)[0])
 
 def _s_screen_worker(args):
-    """
-    Two-parameter VQE for (T2, S) screening.
-
-    Receives a pre-transpiled 2-parameter circuit.  theta_t2 seeds the first
-    parameter (t[0]) and 0.01 seeds the second (t[1] = theta_s).
-    Both parameters are jointly optimised with L-BFGS-B so the S operator is
-    evaluated in the context of the already-good T2 starting point.
-    skip_transpilation=True reuses the main-process compilation.
-    Returns (cand_idx, energy, optimal_s_theta).
-    """
     cand_idx, transpiled_circ, theta_t2, qubit_op, shift = args
-    qi     = QuantumInstance(Aer.get_backend('statevector_simulator'),
-                             pass_manager=PassManager(),
-                             bound_pass_manager=PassManager())
-    vqe    = VQE(transpiled_circ,
-                 optimizer=L_BFGS_B(maxfun=200_000, maxiter=10_000),
-                 quantum_instance=qi,
-                 include_custom=True,
-                 initial_point=np.array([theta_t2, 0.01]))
+    estimator = StatevectorEstimator()
+    vqe = VQE(estimator, transpiled_circ, L_BFGS_B(maxfun=200_000, maxiter=10_000), initial_point=np.array([theta_t2, 0.01]))
     result = vqe.compute_minimum_eigenvalue(qubit_op)
-    return cand_idx, float(np.real(result.eigenvalue)) + shift, float(result.optimal_point[1])
-
+    eigenvalue = result.eigenvalue
+    if eigenvalue is None:
+        raise RuntimeError("VQE did not return an Eigenvalue")
+    optimal_point = result.optimal_point
+    if optimal_point is None:
+        raise RuntimeError("VQE did not return an optimal point")
+    return cand_idx, float(np.real(eigenvalue)) + shift, float(np.asarray(optimal_point).reshape(-1)[1])
 
 # ---------------------------------------------------------------------------
 # Ansatz printer
@@ -153,7 +115,6 @@ def _print_ansatz(op_info):
         print(f"  {i:>4}  {info['type']:<14}  {str(info['excitation']):<38}  {info['theta']:>10.6f}")
     print(f"{'='*75}\n")
 
-
 # ---------------------------------------------------------------------------
 # Main callable
 # ---------------------------------------------------------------------------
@@ -161,9 +122,7 @@ def _print_ansatz(op_info):
 def compass_vqe(coord, d_eq, basis='sto3g', active_space=None, n_workers=None):
     """
     COMPASS-VQE ansatz builder and energy solver with parallel operator screening.
-
     T2 screening and S-operator screening are both parallelised across CPU cores.
-
     Parameters
     ----------
     coord : str
@@ -176,7 +135,6 @@ def compass_vqe(coord, d_eq, basis='sto3g', active_space=None, n_workers=None):
         Orbital indices for S-operator contraction. Default [1, 2, 7, 8].
     n_workers : int, optional
         Number of parallel worker processes. Default: all available CPUs.
-
     Returns
     -------
     dict
@@ -198,33 +156,27 @@ def compass_vqe(coord, d_eq, basis='sto3g', active_space=None, n_workers=None):
     # (fork inherits the parent's thread lock state without the actual threads,
     # which causes silent hangs inside Aer's statevector simulator.)
     _ctx = mp.get_context('spawn')
-
     optimizer = L_BFGS_B(maxfun=200_000, maxiter=10_000)
-    backend   = Aer.get_backend('statevector_simulator')
-
     # ------------------------------------------------------------------
     # 1. Molecular system setup
     # ------------------------------------------------------------------
-    driver     = PySCFDriver(atom=coord, charge=0, spin=0, basis=basis)
-    tf         = FreezeCoreTransformer(freeze_core=True)
-    es_problem = ElectronicStructureProblem(driver, transformers=[tf])
+    # 1. Molecule
+    driver = PySCFDriver(atom=coord, charge=0, spin=0, basis=basis)
+    es_problem_raw = ElectronicStructureProblem(driver)
+    es_problem = FreezeCoreTransformer(freeze_core=True).transform(es_problem_raw)
+    mapper = JordanWignerMapper()
+    second_q_ops = es_problem.second_q_ops()
+    fermionic_op = second_q_ops["ElectronicEnergy"] if isinstance(second_q_ops, dict) else second_q_ops[0]
+    qubit_op = mapper.map(fermionic_op)
+    num_particles = es_problem.num_particles
+    num_spin_orbitals = es_problem.num_spin_orbitals
+    try:
+        shift = es_problem.nuclear_repulsion_energy or 0.0
+    except AttributeError:
+        shift = es_problem_raw.nuclear_repulsion_energy or 0.0
 
-    mapper    = JordanWignerMapper()
-    converter = QubitConverter(mapper=mapper, two_qubit_reduction=False)
-    qubit_op  = converter.convert(es_problem.second_q_ops()[0])
-
-    prop              = es_problem.grouped_property_transformed
-    es_pn             = prop.get_property('ParticleNumber')
-    num_particles     = (es_pn.num_alpha, es_pn.num_beta)
-    num_spin_orbitals = es_pn.num_spin_orbitals
-
-    es_en = prop.get_property('ElectronicEnergy')
-    shift = es_en.nuclear_repulsion_energy + np.real(es_en._shift['FreezeCoreTransformer'])
-
-    init_state = HartreeFock(num_spin_orbitals, num_particles, converter)
-    # Force BlueprintCircuit to build its gate list now so it pickles correctly
-    # when sent to spawn workers (lazy build does not survive pickling).
-    _ = init_state.num_qubits
+    init_state = HartreeFock(num_spin_orbitals, num_particles, qubit_mapper=mapper)
+    _ = init_state.num_qubits  # force build for pickling
 
     # ------------------------------------------------------------------
     # 2. Hartree-Fock energy
@@ -233,9 +185,7 @@ def compass_vqe(coord, d_eq, basis='sto3g', active_space=None, n_workers=None):
     qc    = QuantumCircuit(qubit_op.num_qubits)
     qc.rz(theta * 0, 0)
     qc.compose(init_state, front=True, inplace=True)
-    hf_energy = np.real(
-        VQE(qc, quantum_instance=backend).compute_minimum_eigenvalue(qubit_op).eigenvalue
-    ) + shift
+    hf_energy = np.real(cast(Any,VQE(qc, quantum_instance=backend).compute_minimum_eigenvalue(qubit_op).eigenvalue)) + shift
 
     # ------------------------------------------------------------------
     # 3. Exact (NumPy / FCI) energy
