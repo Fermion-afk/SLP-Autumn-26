@@ -1,0 +1,23 @@
+cat > envi.yml <<'EOF'
+name: slp_env
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - numpy=2.4.6
+  - scipy=1.17.1
+  - matplotlib
+  - pandas
+  - h5py
+  - pyscf=2.14.0
+  - sympy
+  - mpmath
+  - psutil
+  - pip:
+      - qiskit==2.5.2
+      - qiskit-aer==0.17.2
+      - qiskit-algorithms==0.4.0
+      - qiskit-nature==0.8.0
+      - pylatexenc==2.11
+EOF
