@@ -382,29 +382,18 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
     n_states = len(init_states)
 
     print(f"[SS-COMPASS] Pre-compiling {n_t2} T2 operators for {n_states} reference states ...")
-
-    t2_ansatze = [
-        [EvolvedOperatorAnsatz([ops], initial_state=ref) for ref in init_states]
-        for ops in t2_paulis
-    ]
-    t2_ansatze_transpiled = [
-        qk_transpile(cast(list[QuantumCircuit], ansatze), optimization_level=1)
-        for ansatze in t2_ansatze
-    ]
-
-    t2_args = [
-        (i, qubit_op, t2_ansatze_transpiled[i], shift, weights_array, s_weights_array, initial_energies)
-        for i in range(n_t2)
-    ]
-
+    t2_ansatze = [[EvolvedOperatorAnsatz([ops], initial_state=ref) for ref in init_states]
+            for ops in t2_paulis]
+    t2_ansatze_transpiled = [qk_transpile(cast(list[QuantumCircuit], ansatze), optimization_level=1)
+            for ansatze in t2_ansatze]
+    t2_args = [(i, qubit_op, t2_ansatze_transpiled[i], shift, weights_array, s_weights_array, initial_energies)
+            for i in range(n_t2)]
     print(f"[SS-COMPASS] Screening {n_t2} T2 operators for {n_states} reference states ...")
 
     t2_raw = [_t2_screen_worker(args) for args in t2_args]
-    t2_screen = sorted(
-        [(score, idx, theta, energies) for idx, score, theta, energies in t2_raw if abs(score) > threshold_array[0]],
-        key=lambda item: abs(item[0]), reverse=True
-    )
-
+    t2_screen = sorted([(score, idx, theta, energies) for idx, score, theta, energies in t2_raw if abs(score) > threshold_array[0]],
+            key=lambda item: abs(item[0]), reverse=True)
+ 
     print(f"[SS-COMPASS] {len(t2_screen)} T2 operators passed screening (threshold = {threshold_array[0]}).\n")
 
     # ------------------------------------------------------------------
@@ -441,32 +430,20 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
     # ------------------------------------------------------------------
     if s_candidates:
         n_s = len(s_candidates)
+
         print(f"[SS-COMPASS] Pre-compiling {n_s} S circuits for {n_states} reference states ...")
-
-        selected_s_paulis = [
-            sh_paulis[s_idx] if s_type == "h" else sp_paulis[s_idx]
-            for _, rank, t2_idx, s_type, s_idx, theta_t2, t2_energies in s_candidates
-        ]
-
-        s_ansatze = [
-            [EvolvedOperatorAnsatz(operators=[t2_paulis[t2_idx], s_pauli], initial_state=ref)
-             for ref in init_states]
-            for (_, rank, t2_idx, s_type, s_idx, theta_t2, t2_energies), s_pauli
-            in zip(s_candidates, selected_s_paulis)
-        ]
-
-        s_transpiled_list = [
-            qk_transpile(cast(list[QuantumCircuit], ansatze), optimization_level=1)
-            for ansatze in s_ansatze
-        ]
-
-        s_args = [
-            (cand_idx, qubit_op, s_transpiled_list[ci], shift, weights_array,
-             s_weights_array, t2_energies, theta_t2)
-            for ci, (cand_idx, rank, t2_idx, s_type, s_idx, theta_t2, t2_energies)
-            in enumerate(s_candidates)
-        ]
-
+        selected_s_paulis = [sh_paulis[s_idx] if s_type == "h" else sp_paulis[s_idx]
+                    for _, rank, t2_idx, s_type, s_idx, theta_t2, t2_energies in s_candidates]
+        s_ansatze = [[EvolvedOperatorAnsatz(operators=[t2_paulis[t2_idx], s_pauli], initial_state=ref)
+                     for ref in init_states]
+                    for (_, rank, t2_idx, s_type, s_idx, theta_t2, t2_energies), s_pauli
+                    in zip(s_candidates, selected_s_paulis)]
+        s_transpiled_list = [qk_transpile(cast(list[QuantumCircuit], ansatze), optimization_level=1)
+                    for ansatze in s_ansatze]
+        s_args = [(cand_idx, qubit_op, s_transpiled_list[ci], shift, weights_array,
+                     s_weights_array, t2_energies, theta_t2)
+                    for ci, (cand_idx, rank, t2_idx, s_type, s_idx, theta_t2, t2_energies)
+                    in enumerate(s_candidates)]
         print(f"[SS-COMPASS] Screening {n_s} S candidates serially ...")
 
         s_raw = [_s_screen_worker(args) for args in s_args]
@@ -533,7 +510,6 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
     return {
         'geometry': d_eq,
         'energies': state_energies,
-        'energy': state_energies[0],
         'n_params': len(final_opt_t),
         'exact_energies': exact_energies,
         'initial_energies': initial_energies,
