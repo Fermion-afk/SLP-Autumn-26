@@ -40,6 +40,37 @@ from qiskit_nature.second_q.circuit.library import HartreeFock, UCC
 # Ground-state solver interface
 from qiskit_nature.second_q.algorithms import ExcitedStatesEigensolver
 
+def _Sh_ex(num_spin_orbitals, num_particles):
+    return [
+        ((6,0),(8,1)),  ((6,1),(8,1)),  ((6,0),(9,1)),  ((6,1),(9,1)),
+        ((6,0),(10,1)), ((6,1),(10,1)), ((6,0),(11,1)), ((6,1),(11,1)),
+        ((7,0),(8,1)),  ((7,1),(8,1)),  ((7,0),(9,1)),  ((7,1),(9,1)),
+        ((7,0),(10,1)), ((7,1),(10,1)), ((7,0),(11,1)), ((7,1),(11,1)),
+        ((0,6),(2,7)),  ((0,7),(2,7)),  ((0,6),(3,7)),  ((0,7),(3,7)),
+        ((0,6),(4,7)),  ((0,7),(4,7)),  ((0,6),(5,7)),  ((0,7),(5,7)),
+        ((1,6),(2,7)),  ((1,7),(2,7)),  ((1,6),(3,7)),  ((1,7),(3,7)),
+        ((1,6),(4,7)),  ((1,7),(4,7)),  ((1,6),(5,7)),  ((1,7),(5,7)),
+    ]
+
+def _Sp_ex(num_spin_orbitals, num_particles):
+    return [
+        ((6,2),(8,2)),  ((6,2),(8,3)),  ((6,2),(8,4)),  ((6,2),(8,5)),
+        ((6,2),(9,2)),  ((6,2),(9,3)),  ((6,2),(9,4)),  ((6,2),(9,5)),
+        ((6,2),(10,2)), ((6,2),(10,3)), ((6,2),(10,4)), ((6,2),(10,5)),
+        ((6,2),(11,2)), ((6,2),(11,3)), ((6,2),(11,4)), ((6,2),(11,5)),
+        ((7,2),(8,2)),  ((7,2),(8,3)),  ((7,2),(8,4)),  ((7,2),(8,5)),
+        ((7,2),(9,2)),  ((7,2),(9,3)),  ((7,2),(9,4)),  ((7,2),(9,5)),
+        ((7,2),(10,2)), ((7,2),(10,3)), ((7,2),(10,4)), ((7,2),(10,5)),
+        ((7,2),(11,2)), ((7,2),(11,3)), ((7,2),(11,4)), ((7,2),(11,5)),
+        ((0,8),(2,8)),  ((0,8),(2,9)),  ((0,8),(2,10)), ((0,8),(2,11)),
+        ((0,8),(3,8)),  ((0,8),(3,9)),  ((0,8),(3,10)), ((0,8),(3,11)),
+        ((0,8),(4,8)),  ((0,8),(4,9)),  ((0,8),(4,10)), ((0,8),(4,11)),
+        ((0,8),(5,8)),  ((0,8),(5,9)),  ((0,8),(5,10)), ((0,8),(5,11)),
+        ((1,8),(2,8)),  ((1,8),(2,9)),  ((1,8),(2,10)), ((1,8),(2,11)),
+        ((1,8),(3,8)),  ((1,8),(3,9)),  ((1,8),(3,10)), ((1,8),(3,11)),
+        ((1,8),(4,8)),  ((1,8),(4,9)),  ((1,8),(4,10)), ((1,8),(4,11)),
+        ((1,8),(5,8)),  ((1,8),(5,9)),  ((1,8),(5,10)), ((1,8),(5,11)),
+    ]
 # ------------------
 # Helper functions
 # ------------------
@@ -318,22 +349,30 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
         num_spatial_orbitals=es_problem.num_spatial_orbitals,
         excitations="s",initial_state=init_state,qubit_mapper=mapper)
     s_excitations = ucc_s.excitation_list
+    if s_excitations is None:
+        raise ValueError("The UCC single-excitation pool is empty")
     s_paulis = _build_pauli_ops(ucc_s, mapper)
 
     ucc_d = UCC(num_particles=num_particles,
         num_spatial_orbitals=es_problem.num_spatial_orbitals,
         excitations="d",initial_state=init_state,qubit_mapper=mapper)
     t2_excitations = ucc_d.excitation_list
+    if t2_excitations is None:
+        raise ValueError("The UCC double-excitation pool is empty")
     t2_paulis = _build_pauli_ops(ucc_d, mapper)
 
     ucc_sh = UCC(num_particles=num_particles, num_spatial_orbitals=num_spatial_orbitals,
             excitations=_Sh_ex, initial_state=init_state, qubit_mapper=mapper)
     sh_excitations = ucc_sh._get_excitation_list()
+    if sh_excitations is None:
+        raise ValueError("The UCC hole-excitation pool is empty")
     sh_paulis = _build_pauli_ops(ucc_sh,mapper)
 
     ucc_sp = UCC(num_particles=num_particles, num_spatial_orbitals=num_spatial_orbitals,
             excitations=_Sp_ex, initial_state=init_state, qubit_mapper=mapper)
     sp_excitations = ucc_sp._get_excitation_list()
+    if sp_excitations is None:
+        raise ValueError("The UCC particle-excitation pool is empty")
     sp_paulis = _build_pauli_ops(ucc_sp, mapper)
 
     #----------------------------------
@@ -348,7 +387,10 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
         [EvolvedOperatorAnsatz([ops], initial_state=ref) for ref in init_states]
         for ops in t2_paulis
     ]
-    t2_ansatze_transpiled = [qk_transpile(ansatze, optimization_level=1) for ansatze in t2_ansatze]
+    t2_ansatze_transpiled = [
+        qk_transpile(cast(list[QuantumCircuit], ansatze), optimization_level=1)
+        for ansatze in t2_ansatze
+    ]
 
     t2_args = [
         (i, qubit_op, t2_ansatze_transpiled[i], shift, weights_array, s_weights_array, initial_energies)
@@ -374,11 +416,14 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
     s_candidates = []
 
     for rank, (t2_score, t2_idx, theta_t2, t2_energies) in enumerate(t2_screen):
-        t2_ex   = t2_excitations[t2_idx]
-        t2_flat = [t2_ex[0][0], t2_ex[1][0], t2_ex[0][1], t2_ex[1][1]]
-        active_in_t2 = active_space_set.intersection(t2_flat)
-        if not active_in_t2:
-            continue
+        if t2_excitations is not None:
+            t2_ex = t2_excitations[t2_idx]
+            t2_flat = [t2_ex[0][0], t2_ex[1][0], t2_ex[0][1], t2_ex[1][1]]
+            active_in_t2 = active_space_set.intersection(t2_flat)
+            if not active_in_t2:
+                continue
+        else:
+            raise ValueError("the pool of t2 excitations are empty")
 
         sh_seen = set()
         sp_seen = set()
@@ -410,7 +455,10 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
             in zip(s_candidates, selected_s_paulis)
         ]
 
-        s_transpiled_list = [qk_transpile(ansatze, optimization_level=1) for ansatze in s_ansatze]
+        s_transpiled_list = [
+            qk_transpile(cast(list[QuantumCircuit], ansatze), optimization_level=1)
+            for ansatze in s_ansatze
+        ]
 
         s_args = [
             (cand_idx, qubit_op, s_transpiled_list[ci], shift, weights_array,
@@ -463,10 +511,6 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
         final_opt_t.append(0.01)
         final_op_info.append({'type': 'S-standard', 'excitation': s_ex, 'theta': 0.01})
 
-    # Build one final ansatz for each reference state
-    final_ansatze = [EvolvedOperatorAnsatz(final_paulis, initial_state=init_state)
-                    for init_state in init_states]
-
     # Initial parameter vector shared across all reference-state ansatze
     ini_pt = np.array(final_opt_t, dtype=np.float64)
 
@@ -476,7 +520,7 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
     _print_ansatz(final_op_info)
 
     final_ansatze = [EvolvedOperatorAnsatz(final_paulis, initial_state=ref) for ref in init_states]
-    final_transpiled = qk_transpile(final_ansatze, optimization_level=1)
+    final_transpiled = qk_transpile(cast(list[QuantumCircuit], final_ansatze), optimization_level=1)
     final_ss = SS_VQE(StatevectorEstimator(), final_transpiled, weights_array, optimizer,
                       initial_point=ini_pt)
     final_result = final_ss.compute_minimum_eigenvalue(cast(Any,qubit_op))
