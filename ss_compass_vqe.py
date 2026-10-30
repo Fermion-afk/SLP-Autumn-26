@@ -23,7 +23,7 @@ from qiskit.circuit.library import EvolvedOperatorAnsatz
 from qiskit.transpiler import PassManager
 from qiskit.quantum_info import Statevector
 from qiskit.quantum_info import SparsePauliOp
-from qiskit_algorithms import NumPyMinimumEigensolver
+from qiskit_algorithms import NumPyEigensolver
 
 # Qiskit Nature: electronic structure
 from qiskit_nature.second_q.drivers import PySCFDriver
@@ -38,33 +38,43 @@ from qiskit_nature.second_q.mappers import JordanWignerMapper
 from qiskit_nature.second_q.circuit.library import HartreeFock, UCC
 
 # Ground-state solver interface
-from qiskit_nature.second_q.algorithms import GroundStateEigensolver
+from qiskit_nature.second_q.algorithms import ExcitedStatesEigensolver
 
 # ------------------
 # Helper functions
 # ------------------
 
 def _t2_screen_worker(args):
-    idx,operator,transpiled_circuit,shift,weights = args
+    idx, hamiltonian, transpiled_circuit, shift, weights, s_weights, initial_energies = args
+
     estimator = StatevectorEstimator()
     optimizer = L_BFGS_B(maxfun=200_000, maxiter=10_000)
-    ss_vqe = SS_VQE(estimator,transpiled_circuit,weights,optimizer,
-                    initial_point = np.array([0.0]))
-    result = ss_vqe.compute_minimum_eigenvalue(operator)
-    eigenvalue = result.eigenvalue
-    optimal_point = result.optimal_point
-    return idx, float(np.real(cast(Any, eigenvalue))) + shift,float(np.asarray(optimal_point).reshape(-1)[0])
+    ss_vqe = SS_VQE(estimator, transpiled_circuit, weights, optimizer,
+                    initial_point=np.array([0.0]))
+    result = ss_vqe.compute_minimum_eigenvalue(hamiltonian)
+    optimal_point = np.asarray(result.optimal_point).reshape(-1)
+    theta_t2 = float(optimal_point[0])
+    state_energies = _state_energies(estimator, transpiled_circuit, hamiltonian, optimal_point, shift)
+    delta_energies = state_energies - initial_energies
+    screening_score = float(np.dot(s_weights, delta_energies))
+
+    return idx, screening_score, theta_t2, state_energies
 
 def _s_screen_worker(args):
-    idx,operator,transpiled_circuit,shift,weights,theta_t2 = args
+    idx, hamiltonian, transpiled_circuit, shift, weights, s_weights, baseline_energies, theta_t2 = args
+
     estimator = StatevectorEstimator()
     optimizer = L_BFGS_B(maxfun=200_000, maxiter=10_000)
-    ss_vqe = SS_VQE(estimator,transpiled_circuit,weights,optimizer,
-                    initial_point = np.array([theta_t2,0.01]))
-    result = ss_vqe.compute_minimum_eigenvalue(operator)
-    eigenvalue = result.eigenvalue
-    optimal_point = result.optimal_point
-    return idx,float(np.real(cast(Any,eigenvalue))) + shift,float(np.asarray(optimal_point).reshape(-1)[1])
+    ss_vqe = SS_VQE(estimator, transpiled_circuit, weights, optimizer,
+                    initial_point=np.array([theta_t2, 0.01]))
+    result = ss_vqe.compute_minimum_eigenvalue(hamiltonian)
+    optimal_point = np.asarray(result.optimal_point).reshape(-1)
+    theta_s = float(optimal_point[1])
+    state_energies = _state_energies(estimator, transpiled_circuit, hamiltonian, optimal_point, shift)
+    delta_energies = state_energies - baseline_energies
+    screening_score = float(np.dot(s_weights, delta_energies))
+
+    return idx, screening_score, theta_s, state_energies
 
 def _print_ansatz(op_info):
     n = len(op_info)
@@ -79,6 +89,15 @@ def _print_ansatz(op_info):
 
 def _build_pauli_ops(ucc_form, mapper):
     return [mapper.map(op) for op in ucc_form.excitation_ops()]
+
+def _state_energies(estimator, ansatze, operator, point=None, shift=0.0):
+    """Return individual state energies <psi_i|H|psi_i> + shift."""
+    energies = []
+    for ansatz in ansatze:
+        pub = (ansatz, operator) if point is None else (ansatz, operator, point)
+        energy = estimator.run([pub]).result()[0].data.evs
+        energies.append(float(np.real(energy)) + shift)
+    return np.asarray(energies, dtype=float)
 
 #------------------------------------
 # Helper Functions for _init_states()
@@ -136,20 +155,28 @@ def _mapped_bitstring(occ, enc, n_qubits):
 # ----------------
 # Main Callable
 # ----------------
-def ss_compass_vqe(coordinates: str,d_eq: float,basis_set: str,no_init_states: int,weights:list,
-                   method: str = "HartreeFock",active_space: list|None = None,N_workers: int|None= None) -> dict|None:
-    """ Returns
-        -------
-        dict
-            'geometry'      : d_eq
-            'energy'        : COMPASS-VQE total energy (Hartree)
-            'n_params'      : number of variational parameters
-            'exact_energy'  : NumPy (FCI) total energy (Hartree)
-            'hf_energy'     : Hartree-Fock energy (Hartree)
-            'ansatz'        : final EvolvedOperatorAnsatz
-            'optimal_params': optimised parameter vector
-            'op_info'       : list of dicts describing each operator in the ansatz
-    """
+def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states: int, weights: list,
+                   method: str = "HartreeFock",  threshold: list = [1e-5,1e-5],active_space: list | None = None,
+                   N_workers: int | None = None, s_weights: list | None = None,
+                  ) -> dict | None:
+
+    if s_weights is None:
+        s_weights = weights[::-1]
+
+    if threshold is None or len(threshold) != 2:
+        raise ValueError("threshold must be a length-2 list: [T2_threshold, S_threshold].")
+
+    # Preserve the declared list types; use array views for numerical work.
+    weights_array = np.asarray(weights, dtype=float)
+    s_weights_array = np.asarray(s_weights, dtype=float)
+    threshold_array = np.asarray(threshold, dtype=float)
+
+    if len(weights_array) != no_init_states or len(s_weights_array) != no_init_states:
+        raise ValueError("weights and s_weights must have length no_init_states.")
+
+    if np.any(threshold_array < 0):
+        raise ValueError("Screening thresholds must be non-negative.")
+    
     if active_space is None:
             active_space = [1, 2, 7, 8]
     active_space_set = set(active_space)
@@ -187,6 +214,7 @@ def ss_compass_vqe(coordinates: str,d_eq: float,basis_set: str,no_init_states: i
     num_spatial_orbitals = int(cast(Any, es_problem.num_spatial_orbitals))  
 
     def _init_states(method, no_init_states, num_spatial_orbitals, num_particles, qubit_mapper):
+
         n, (na, nb), k = num_spatial_orbitals, num_particles, no_init_states
         enc, nq = _number_operator_encoding(qubit_mapper, 2*n)
         sa = cistring.make_strings(range(n), na)
@@ -255,7 +283,11 @@ def ss_compass_vqe(coordinates: str,d_eq: float,basis_set: str,no_init_states: i
             circuits.append(qc)
         return circuits
 
-    init_states = _init_states(method, no_init_states,num_spatial_orbitals,num_particles, mapper)
+    init_states = _init_states(method, no_init_states,num_spatial_orbitals,num_pa, mapper)
+        # Initial reference-state energies E_i^(0)
+    initial_energies = _state_energies(StatevectorEstimator(), init_states, qubit_op, shift=shift)
+    print("[SS-COMPASS] Initial reference-state energies:")
+    print(initial_energies)
 
     # Force circuit construction before sending it to worker processes
     _ = init_states[0].num_qubits
@@ -265,16 +297,20 @@ def ss_compass_vqe(coordinates: str,d_eq: float,basis_set: str,no_init_states: i
     num_spatial_orbitals = es_problem.num_spatial_orbitals
     init_state = HartreeFock(num_spatial_orbitals,num_particles,mapper)
     # ------------------------------------------------------------------
-    # 3. Exact (NumPy / FCI) energy
+    # 3. Exact (NumPy / FCI) energy spectrum
     # ------------------------------------------------------------------
-    numpy_solver = NumPyMinimumEigensolver(filter_criterion=cast(Any,es_problem.get_default_filter_criterion()))
-    calc = GroundStateEigensolver(mapper, numpy_solver)
+    numpy_solver = NumPyEigensolver(
+        k=no_init_states,
+        filter_criterion=cast(Any, es_problem.get_default_filter_criterion())
+    )
+    calc = ExcitedStatesEigensolver(mapper, numpy_solver)
     exact_result = calc.solve(es_problem)
-    result = exact_result.eigenvalues
-    if result is not None:
-        exact_energy = float(np.real(result[0]))
-    else : 
-        raise RuntimeError("The FCI calculation didn't return any output")
+    if exact_result.eigenvalues is not None:
+        exact_energies = np.real(exact_result.eigenvalues)
+    else:
+        raise RuntimeError("The FCI calculation didn't return any eigenvalues.")
+    print(f"First {len(exact_energies)} FCI eigenvalues:")
+    print(exact_energies)
     # ------------------------------------------------------------------
     # 4. Build operator pools
     # ------------------------------------------------------------------
@@ -300,3 +336,164 @@ def ss_compass_vqe(coordinates: str,d_eq: float,basis_set: str,no_init_states: i
     sp_excitations = ucc_sp._get_excitation_list()
     sp_paulis = _build_pauli_ops(ucc_sp, mapper)
 
+    #----------------------------------
+    # 5. T2 screening
+    #----------------------------------
+    n_t2 = len(t2_paulis)
+    n_states = len(init_states)
+
+    print(f"[SS-COMPASS] Pre-compiling {n_t2} T2 operators for {n_states} reference states ...")
+
+    t2_ansatze = [
+        [EvolvedOperatorAnsatz([ops], initial_state=ref) for ref in init_states]
+        for ops in t2_paulis
+    ]
+    t2_ansatze_transpiled = [qk_transpile(ansatze, optimization_level=1) for ansatze in t2_ansatze]
+
+    t2_args = [
+        (i, qubit_op, t2_ansatze_transpiled[i], shift, weights_array, s_weights_array, initial_energies)
+        for i in range(n_t2)
+    ]
+
+    print(f"[SS-COMPASS] Screening {n_t2} T2 operators for {n_states} reference states ...")
+
+    t2_raw = [_t2_screen_worker(args) for args in t2_args]
+    t2_screen = sorted(
+        [(score, idx, theta, energies) for idx, score, theta, energies in t2_raw if abs(score) > threshold_array[0]],
+        key=lambda item: abs(item[0]), reverse=True
+    )
+
+    print(f"[SS-COMPASS] {len(t2_screen)} T2 operators passed screening (threshold = {threshold_array[0]}).\n")
+
+    # ------------------------------------------------------------------
+    # 6. Determine S-operator candidates (pure Python — no VQE needed)
+    #    For each sorted T2, collect unique S-hole/particle indices whose
+    #    contractible orbital matches an active orbital in that T2.
+    # ------------------------------------------------------------------
+    # s_candidates: list of (cand_idx, rank, t2_idx, s_type, s_idx, theta_t2, E_t2)
+    s_candidates = []
+
+    for rank, (t2_score, t2_idx, theta_t2, t2_energies) in enumerate(t2_screen):
+        t2_ex   = t2_excitations[t2_idx]
+        t2_flat = [t2_ex[0][0], t2_ex[1][0], t2_ex[0][1], t2_ex[1][1]]
+        active_in_t2 = active_space_set.intersection(t2_flat)
+        if not active_in_t2:
+            continue
+
+        sh_seen = set()
+        sp_seen = set()
+        for act_orb in active_in_t2:
+            for j, sh_ex in enumerate(sh_excitations):
+                if j not in sh_seen and sh_ex[1][1] == act_orb:
+                    s_candidates.append((len(s_candidates), rank, t2_idx, 'h', j, theta_t2, t2_energies))
+                    sh_seen.add(j)
+            for j, sp_ex in enumerate(sp_excitations):
+                if j not in sp_seen and sp_ex[0][1] == act_orb:
+                    s_candidates.append((len(s_candidates), rank, t2_idx, 'p', j, theta_t2, t2_energies))
+                    sp_seen.add(j)
+    # ------------------------------------------------------------------
+    # 7. Build and screen S-hole / S-particle candidates
+    # ------------------------------------------------------------------
+    if s_candidates:
+        n_s = len(s_candidates)
+        print(f"[SS-COMPASS] Pre-compiling {n_s} S circuits for {n_states} reference states ...")
+
+        selected_s_paulis = [
+            sh_paulis[s_idx] if s_type == "h" else sp_paulis[s_idx]
+            for _, rank, t2_idx, s_type, s_idx, theta_t2, t2_energies in s_candidates
+        ]
+
+        s_ansatze = [
+            [EvolvedOperatorAnsatz(operators=[t2_paulis[t2_idx], s_pauli], initial_state=ref)
+             for ref in init_states]
+            for (_, rank, t2_idx, s_type, s_idx, theta_t2, t2_energies), s_pauli
+            in zip(s_candidates, selected_s_paulis)
+        ]
+
+        s_transpiled_list = [qk_transpile(ansatze, optimization_level=1) for ansatze in s_ansatze]
+
+        s_args = [
+            (cand_idx, qubit_op, s_transpiled_list[ci], shift, weights_array,
+             s_weights_array, t2_energies, theta_t2)
+            for ci, (cand_idx, rank, t2_idx, s_type, s_idx, theta_t2, t2_energies)
+            in enumerate(s_candidates)
+        ]
+
+        print(f"[SS-COMPASS] Screening {n_s} S candidates serially ...")
+
+        s_raw = [_s_screen_worker(args) for args in s_args]
+        s_results = {cand_idx: (score, theta_s, state_energies)
+                     for cand_idx, score, theta_s, state_energies in s_raw}
+    else:
+        s_results = {}
+
+    s_by_rank = defaultdict(list)
+
+    for cand_idx, rank, t2_idx, s_type, s_idx, theta_t2, t2_energies in s_candidates:
+        screening_score, opt_s_theta, state_energies = s_results[cand_idx]
+
+        if abs(screening_score) > threshold_array[1]:
+            s_pauli = sh_paulis[s_idx] if s_type == "h" else sp_paulis[s_idx]
+            s_ex = sh_excitations[s_idx] if s_type == "h" else sp_excitations[s_idx]
+            label = "S-hole" if s_type == "h" else "S-particle"
+            s_by_rank[rank].append((s_pauli, s_ex, label, opt_s_theta))
+
+    n_s_accepted = sum(len(operators) for operators in s_by_rank.values())
+    print(f"[SS-COMPASS] {n_s_accepted} S operators passed screening (threshold = {threshold_array[1]}).\n")
+
+    # ------------------------------------------------------------------
+    # 8. Assemble final ansatz: sorted T2 -> its S operators -> standard singles
+    # ------------------------------------------------------------------
+    final_paulis = []
+    final_opt_t = []
+    final_op_info = []
+
+    for rank, (t2_score, t2_idx, theta_t2, t2_energies) in enumerate(t2_screen):
+        final_paulis.append(t2_paulis[t2_idx])
+        final_opt_t.append(theta_t2)
+        final_op_info.append({'type': 'T2', 'excitation': t2_excitations[t2_idx], 'theta': theta_t2})
+
+        for s_pauli, s_ex, label, opt_s_theta in s_by_rank.get(rank, []):
+            final_paulis.append(s_pauli)
+            final_opt_t.append(opt_s_theta)
+            final_op_info.append({'type': label, 'excitation': s_ex, 'theta': opt_s_theta})
+
+    for i, s_ex in enumerate(s_excitations):
+        final_paulis.append(s_paulis[i])
+        final_opt_t.append(0.01)
+        final_op_info.append({'type': 'S-standard', 'excitation': s_ex, 'theta': 0.01})
+
+    # Build one final ansatz for each reference state
+    final_ansatze = [EvolvedOperatorAnsatz(final_paulis, initial_state=init_state)
+                    for init_state in init_states]
+
+    # Initial parameter vector shared across all reference-state ansatze
+    ini_pt = np.array(final_opt_t, dtype=np.float64)
+
+    print(f"[SS-COMPASS] Final ansatz contains {len(final_paulis)} operators "
+        f"and {len(ini_pt)} parameters across {n_states} reference states.")
+    
+    _print_ansatz(final_op_info)
+
+    final_ansatze = [EvolvedOperatorAnsatz(final_paulis, initial_state=ref) for ref in init_states]
+    final_transpiled = qk_transpile(final_ansatze, optimization_level=1)
+    final_ss = SS_VQE(StatevectorEstimator(), final_transpiled, weights_array, optimizer,
+                      initial_point=ini_pt)
+    final_result = final_ss.compute_minimum_eigenvalue(cast(Any,qubit_op))
+    # per-reference-state energies at the optimum (weighted cost alone hides these)
+    state_energies = _state_energies(StatevectorEstimator(), final_result.optimal_circuits, qubit_op, shift=shift)
+    print(f"geom- {d_eq}  parameters- {len(final_opt_t)}")
+    for i, (e, ex) in enumerate(zip(state_energies, exact_energies)):
+        print(f"  state {i}: SS-COMPASS {e:.8f}   exact {ex:.8f}   err {abs(e - ex):.2e}")
+
+    return {
+        'geometry': d_eq,
+        'energies': state_energies,
+        'energy': state_energies[0],
+        'n_params': len(final_opt_t),
+        'exact_energies': exact_energies,
+        'initial_energies': initial_energies,
+        'ansatz': final_ansatze,
+        'optimal_params': final_result.optimal_point,
+        'op_info': final_op_info,
+    }

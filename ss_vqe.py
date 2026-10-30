@@ -131,34 +131,27 @@ class SS_VQE(VariationalAlgorithm, MinimumEigensolver):
         if not self.ansatze:
             raise ValueError("SS-VQE requires at least one ansatz.")
 
-        
-
         if self.ansatze[0].layout is not None:
             operator = cast(Any, operator).apply_layout(self.ansatze[0].layout)
 
         self._check_operator_ansatze(operator)
-
         initial_point = validate_initial_point(self.initial_point, self.ansatze[0])
-
         bounds = validate_bounds(self.ansatze[0])
-
         start_time = time()
-
         evaluate_energy = self.ss_get_evaluate_energy(self.ansatze, operator, self.weights)
 
         if self.gradient is not None:
-            evaluate_gradient = self.ss_get_evaluate_gradient(self.ansatze, operator, self.weights)
+            evaluate_gradient = self.gradient
         else:
-            evaluate_gradient = None
+            evaluate_gradient = self.ss_get_evaluate_gradient(self.ansatze, operator, self.weights)
 
         # perform optimization
         if callable(self.optimizer):
             optimizer_result = cast(OptimizerResult, self.optimizer(
                 fun=evaluate_energy,  # type: ignore[arg-type]
                 x0=initial_point,
-                jac=evaluate_gradient,
+                jac=cast(Any,evaluate_gradient),
                 bounds=cast(Any, bounds)))
-        
         else:
             # we always want to submit as many estimations per job as possible for minimal
             # overhead on the hardware
@@ -173,9 +166,7 @@ class SS_VQE(VariationalAlgorithm, MinimumEigensolver):
             # reset to original value
             if was_updated:
                 self.optimizer.set_max_evals_grouped(None)
-
         optimizer_time = time() - start_time
-
         logger.info(
             "Optimization complete in %s seconds.\nFound optimal point %s",
             optimizer_time,
@@ -186,11 +177,9 @@ class SS_VQE(VariationalAlgorithm, MinimumEigensolver):
 
             for ansatz in self.ansatze:
                 current_aux_operators: ListOrDict[BaseOperator] = aux_operators
-
                 if ansatz.layout is not None:
                     zero_op = SparsePauliOp.from_list(
                         [("I" * len(ansatz.layout.final_index_layout()),0)])
-   
                     if isinstance(aux_operators, list):
                         converted: ListOrDict[BaseOperator] = [
                             cast(BaseOperator, zero_op)
@@ -252,22 +241,17 @@ class SS_VQE(VariationalAlgorithm, MinimumEigensolver):
 
         def evaluate_energy(parameters: np.ndarray) -> np.ndarray | float:
             nonlocal eval_count
-
             parameters = np.reshape(parameters, (-1, num_parameters))
-
             try:
                 results = []
                 for ansatz in ansatze:
                     job = self.estimator.run([(ansatz, operator, parameters.tolist())])
                     results.append(job.result()[0])
-
             except Exception as exc:
                 raise AlgorithmError(
                     "The primitive job to evaluate the SS-VQE energy failed!"
                 ) from exc
-
             energies = []
-
             for result in results:
                 values = np.asarray(result.data.evs)
                 if not values.shape:
@@ -276,17 +260,14 @@ class SS_VQE(VariationalAlgorithm, MinimumEigensolver):
 
             # Shape: (number of reference states, number of parameter sets)
             energies = np.asarray(energies)
-
             # Weighted sum over reference states
             cost_values = np.sum(np.asarray(weights)[:, None]*energies, axis=0)
 
             if self.callback is not None:
                 for params, value in zip(parameters, cost_values):
                     eval_count += 1
-                    self.callback(
-                        eval_count, params, value, results[0].metadata
-                    )
-
+                    self.callback(eval_count, params, value, results[0].metadata)
+    
             return cost_values[0] if len(cost_values) == 1 else cost_values
 
         return evaluate_energy
