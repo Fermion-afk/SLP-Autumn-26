@@ -1,4 +1,4 @@
-from ss_compass_vqe import ss_compass_vqe
+from ss_compass_vqe_timestamped import ss_compass_vqe
 
 # -------------------- Molecular system --------------------
 
