@@ -40,37 +40,104 @@ from qiskit_nature.second_q.circuit.library import HartreeFock, UCC
 # Ground-state solver interface
 from qiskit_nature.second_q.algorithms import ExcitedStatesEigensolver
 
-def _Sh_ex(num_spin_orbitals, num_particles):
-    return [
-        ((6,0),(8,1)),  ((6,1),(8,1)),  ((6,0),(9,1)),  ((6,1),(9,1)),
-        ((6,0),(10,1)), ((6,1),(10,1)), ((6,0),(11,1)), ((6,1),(11,1)),
-        ((7,0),(8,1)),  ((7,1),(8,1)),  ((7,0),(9,1)),  ((7,1),(9,1)),
-        ((7,0),(10,1)), ((7,1),(10,1)), ((7,0),(11,1)), ((7,1),(11,1)),
-        ((0,6),(2,7)),  ((0,7),(2,7)),  ((0,6),(3,7)),  ((0,7),(3,7)),
-        ((0,6),(4,7)),  ((0,7),(4,7)),  ((0,6),(5,7)),  ((0,7),(5,7)),
-        ((1,6),(2,7)),  ((1,7),(2,7)),  ((1,6),(3,7)),  ((1,7),(3,7)),
-        ((1,6),(4,7)),  ((1,7),(4,7)),  ((1,6),(5,7)),  ((1,7),(5,7)),
-    ]
+# def _Sh_ex(num_spatial_orbitals=None, num_particles=None, **kwargs):
+#     if num_spatial_orbitals is None:
+#         num_spatial_orbitals = kwargs["num_spin_orbitals"]
+#     return [
+#         ((6,0),(8,1)),  ((6,1),(8,1)),  ((6,0),(9,1)),  ((6,1),(9,1)),
+#         ((6,0),(10,1)), ((6,1),(10,1)), ((6,0),(11,1)), ((6,1),(11,1)),
+#         ((7,0),(8,1)),  ((7,1),(8,1)),  ((7,0),(9,1)),  ((7,1),(9,1)),
+#         ((7,0),(10,1)), ((7,1),(10,1)), ((7,0),(11,1)), ((7,1),(11,1)),
+#         ((0,6),(2,7)),  ((0,7),(2,7)),  ((0,6),(3,7)),  ((0,7),(3,7)),
+#         ((0,6),(4,7)),  ((0,7),(4,7)),  ((0,6),(5,7)),  ((0,7),(5,7)),
+#         ((1,6),(2,7)),  ((1,7),(2,7)),  ((1,6),(3,7)),  ((1,7),(3,7)),
+#         ((1,6),(4,7)),  ((1,7),(4,7)),  ((1,6),(5,7)),  ((1,7),(5,7)),
+#     ]
 
-def _Sp_ex(num_spin_orbitals, num_particles):
-    return [
-        ((6,2),(8,2)),  ((6,2),(8,3)),  ((6,2),(8,4)),  ((6,2),(8,5)),
-        ((6,2),(9,2)),  ((6,2),(9,3)),  ((6,2),(9,4)),  ((6,2),(9,5)),
-        ((6,2),(10,2)), ((6,2),(10,3)), ((6,2),(10,4)), ((6,2),(10,5)),
-        ((6,2),(11,2)), ((6,2),(11,3)), ((6,2),(11,4)), ((6,2),(11,5)),
-        ((7,2),(8,2)),  ((7,2),(8,3)),  ((7,2),(8,4)),  ((7,2),(8,5)),
-        ((7,2),(9,2)),  ((7,2),(9,3)),  ((7,2),(9,4)),  ((7,2),(9,5)),
-        ((7,2),(10,2)), ((7,2),(10,3)), ((7,2),(10,4)), ((7,2),(10,5)),
-        ((7,2),(11,2)), ((7,2),(11,3)), ((7,2),(11,4)), ((7,2),(11,5)),
-        ((0,8),(2,8)),  ((0,8),(2,9)),  ((0,8),(2,10)), ((0,8),(2,11)),
-        ((0,8),(3,8)),  ((0,8),(3,9)),  ((0,8),(3,10)), ((0,8),(3,11)),
-        ((0,8),(4,8)),  ((0,8),(4,9)),  ((0,8),(4,10)), ((0,8),(4,11)),
-        ((0,8),(5,8)),  ((0,8),(5,9)),  ((0,8),(5,10)), ((0,8),(5,11)),
-        ((1,8),(2,8)),  ((1,8),(2,9)),  ((1,8),(2,10)), ((1,8),(2,11)),
-        ((1,8),(3,8)),  ((1,8),(3,9)),  ((1,8),(3,10)), ((1,8),(3,11)),
-        ((1,8),(4,8)),  ((1,8),(4,9)),  ((1,8),(4,10)), ((1,8),(4,11)),
-        ((1,8),(5,8)),  ((1,8),(5,9)),  ((1,8),(5,10)), ((1,8),(5,11)),
-    ]
+# def _Sp_ex(num_spatial_orbitals=None, num_particles=None, **kwargs):
+#     if num_spatial_orbitals is None:
+#         num_spatial_orbitals = kwargs["num_spin_orbitals"]
+#     return [
+#         ((6,2),(8,2)),  ((6,2),(8,3)),  ((6,2),(8,4)),  ((6,2),(8,5)),
+#         ((6,2),(9,2)),  ((6,2),(9,3)),  ((6,2),(9,4)),  ((6,2),(9,5)),
+#         ((6,2),(10,2)), ((6,2),(10,3)), ((6,2),(10,4)), ((6,2),(10,5)),
+#         ((6,2),(11,2)), ((6,2),(11,3)), ((6,2),(11,4)), ((6,2),(11,5)),
+#         ((7,2),(8,2)),  ((7,2),(8,3)),  ((7,2),(8,4)),  ((7,2),(8,5)),
+#         ((7,2),(9,2)),  ((7,2),(9,3)),  ((7,2),(9,4)),  ((7,2),(9,5)),
+#         ((7,2),(10,2)), ((7,2),(10,3)), ((7,2),(10,4)), ((7,2),(10,5)),
+#         ((7,2),(11,2)), ((7,2),(11,3)), ((7,2),(11,4)), ((7,2),(11,5)),
+#         ((0,8),(2,8)),  ((0,8),(2,9)),  ((0,8),(2,10)), ((0,8),(2,11)),
+#         ((0,8),(3,8)),  ((0,8),(3,9)),  ((0,8),(3,10)), ((0,8),(3,11)),
+#         ((0,8),(4,8)),  ((0,8),(4,9)),  ((0,8),(4,10)), ((0,8),(4,11)),
+#         ((0,8),(5,8)),  ((0,8),(5,9)),  ((0,8),(5,10)), ((0,8),(5,11)),
+#         ((1,8),(2,8)),  ((1,8),(2,9)),  ((1,8),(2,10)), ((1,8),(2,11)),
+#         ((1,8),(3,8)),  ((1,8),(3,9)),  ((1,8),(3,10)), ((1,8),(3,11)),
+#         ((1,8),(4,8)),  ((1,8),(4,9)),  ((1,8),(4,10)), ((1,8),(4,11)),
+#         ((1,8),(5,8)),  ((1,8),(5,9)),  ((1,8),(5,10)), ((1,8),(5,11)),
+#     ]
+
+from itertools import combinations, product
+
+def _Sh_ex(num_spatial_orbitals=None, num_particles=None, **kwargs):
+    if num_spatial_orbitals is None:
+        num_spatial_orbitals = kwargs["num_spin_orbitals"]
+
+    n = num_spatial_orbitals
+    if num_particles is not None:
+            n_alpha, n_beta = num_particles
+    else:
+        n_alpha,n_beta = (0,0)
+
+    # Occupied and virtual spin orbitals, assuming alpha orbitals first
+    occupied = list(range(n_alpha)) + list(range(n, n + n_beta))
+    virtual = [i for i in range(2 * n) if i not in occupied]
+
+    excitations = []
+
+    # Spin-conserving single excitations
+    for i in occupied:
+        for a in virtual:
+            if i % n == a % n:
+                continue
+            if (i < n) == (a < n):
+                excitations.append(((i,), (a,)))
+
+    # Spin-conserving double excitations
+    for occ in combinations(occupied, 2):
+        for virt in combinations(virtual, 2):
+            if sum(i < n for i in occ) != sum(a < n for a in virt):
+                continue
+            if len(set(occ + virt)) == 4:
+                excitations.append((occ, virt))
+
+    return excitations
+
+
+def _Sp_ex(num_spatial_orbitals=None, num_particles=None, **kwargs):
+    if num_spatial_orbitals is None:
+        num_spatial_orbitals = kwargs["num_spin_orbitals"]
+
+    n = num_spatial_orbitals
+    if num_particles is not None:
+        n_alpha, n_beta = num_particles
+    else:
+        n_alpha,n_beta = (0,0)
+
+    occupied = list(range(n_alpha)) + list(range(n, n + n_beta))
+    virtual = [i for i in range(2 * n) if i not in occupied]
+
+    excitations = []
+
+    # Spin-conserving double excitations
+    for occ in combinations(occupied, 2):
+        for virt in combinations(virtual, 2):
+            if sum(i < n for i in occ) != sum(a < n for a in virt):
+                continue
+            if len(set(occ + virt)) == 4:
+                excitations.append((occ, virt))
+
+    return excitations
+
 # ------------------
 # Helper functions
 # ------------------

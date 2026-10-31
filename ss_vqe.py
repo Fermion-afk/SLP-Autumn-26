@@ -17,7 +17,7 @@ from qiskit.primitives import BaseEstimatorV2
 from qiskit.quantum_info import SparsePauliOp
 from qiskit.quantum_info.operators.base_operator import BaseOperator
 
-from qiskit_algorithms.gradients import BaseEstimatorGradient
+from qiskit_algorithms.gradients import BaseEstimatorGradient,ParamShiftEstimatorGradient
 from qiskit_algorithms.custom_types import Transpiler
 from qiskit_algorithms.exceptions import AlgorithmError
 from qiskit_algorithms.list_or_dict import ListOrDict
@@ -281,13 +281,13 @@ class SS_VQE(VariationalAlgorithm, MinimumEigensolver):
 
         def evaluate_gradient(parameters: np.ndarray) -> np.ndarray:
             try:
-                gradients = []
                 gradient = self.gradient
-                if gradient is None:
-                    raise AlgorithmError(
-                        "A gradient primitive is required to evaluate gradients."
-                    )
 
+                # Use the user-provided gradient, or construct one if absent
+                if gradient is None:
+                    gradient = ParamShiftEstimatorGradient(self.estimator)
+
+                gradients = []
                 for ansatz in ansatze:
                     job = gradient.run([ansatz], [operator], [parameters.tolist()])
                     gradients.append(job.result().gradients[0])
@@ -301,10 +301,7 @@ class SS_VQE(VariationalAlgorithm, MinimumEigensolver):
             gradients = np.asarray(gradients)
 
             # Weighted sum over reference states
-            cost_gradient = np.sum(
-                np.asarray(weights)[:, None]*gradients,
-                axis=0,
-            )
+            cost_gradient = np.sum(np.asarray(weights)[:, None] * gradients, axis=0)
 
             return cost_gradient
 
