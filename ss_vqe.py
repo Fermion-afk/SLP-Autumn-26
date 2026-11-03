@@ -3,6 +3,7 @@
 # of the number of parameters, number of qubits, Bounds of the parameter, Layout, and Share the Same initial Point 
 
 from __future__ import annotations
+from concurrent.futures import ThreadPoolExecutor
 
 import logging
 import warnings
@@ -22,8 +23,8 @@ from qiskit_algorithms.custom_types import Transpiler
 from qiskit_algorithms.exceptions import AlgorithmError
 from qiskit_algorithms.list_or_dict import ListOrDict
 from qiskit_algorithms.optimizers import Optimizer, Minimizer, OptimizerResult
-from qiskit_algorithms.variational_algorithm import VariationalAlgorithm, VariationalResult
-from qiskit_algorithms.minimum_eigensolvers.minimum_eigensolver import MinimumEigensolver, MinimumEigensolverResult
+from qiskit_algorithms.variational_algorithm import VariationalAlgorithm
+from qiskit_algorithms.minimum_eigensolvers.minimum_eigensolver import MinimumEigensolver
 from qiskit_algorithms.observables_evaluator import estimate_observables
 from qiskit_algorithms.utils import validate_initial_point, validate_bounds
 
@@ -229,48 +230,65 @@ class SS_VQE(VariationalAlgorithm, MinimumEigensolver):
     def supports_aux_operators(cls) -> bool:
         return True
 
-    def ss_get_evaluate_energy(
-        self,
-        ansatze: list[QuantumCircuit],
-        operator: BaseOperator,
-        weights: np.ndarray,
-    ) -> Callable[[np.ndarray], np.ndarray | float]:
-
+    def ss_get_evaluate_energy(self,ansatze: list[QuantumCircuit],
+        operator: BaseOperator,weights: np.ndarray) -> Callable[[np.ndarray], np.ndarray | float]:
         num_parameters = ansatze[0].num_parameters
         eval_count = 0
+
+        def _evaluate_one(ansatz, operator, parameters):
+            job = self.estimator.run([(ansatz, operator, parameters.tolist())])
+            return job.result()[0]
 
         def evaluate_energy(parameters: np.ndarray) -> np.ndarray | float:
             nonlocal eval_count
             parameters = np.reshape(parameters, (-1, num_parameters))
+
             try:
-                results = []
-                for ansatz in ansatze:
-                    job = self.estimator.run([(ansatz, operator, parameters.tolist())])
-                    results.append(job.result()[0])
+                with ThreadPoolExecutor(max_workers=len(ansatze)) as executor:
+                    futures = [
+                        executor.submit(_evaluate_one, ansatz, operator, params)
+                        for params in parameters
+                        for ansatz in ansatze
+                    ]
+                    results = [future.result() for future in futures]
+
             except Exception as exc:
                 raise AlgorithmError(
                     "The primitive job to evaluate the SS-VQE energy failed!"
                 ) from exc
+
+            n_parameter_sets = len(parameters)
             energies = []
-            for result in results:
-                values = np.asarray(result.data.evs)
-                if not values.shape:
-                    values = values.reshape(1)
-                energies.append(values)
+
+            for state_idx in range(len(ansatze)):
+                state_results = results[
+                    state_idx::len(ansatze)
+                ]
+
+                values = []
+                for result in state_results:
+                    value = np.asarray(cast(Any, result.data).evs)
+                    if not value.shape:
+                        value = value.reshape(1)
+                    values.append(value)
+
+                energies.append(np.asarray(values).reshape(n_parameter_sets, -1).T)
 
             # Shape: (number of reference states, number of parameter sets)
-            energies = np.asarray(energies)
-            # Weighted sum over reference states
-            cost_values = np.sum(np.asarray(weights)[:, None]*energies, axis=0)
+            energies = np.asarray(energies).squeeze()
+            if energies.ndim == 1:
+                energies = energies[:, None]
+
+            cost_values = np.sum(np.asarray(weights)[:, None] * energies, axis=0)
 
             if self.callback is not None:
                 for params, value in zip(parameters, cost_values):
                     eval_count += 1
                     self.callback(eval_count, params, value, results[0].metadata)
-    
+
             return cost_values[0] if len(cost_values) == 1 else cost_values
 
-        return evaluate_energy
+        return evaluate_energy    
 
     def ss_get_evaluate_gradient(
         self,
@@ -279,29 +297,30 @@ class SS_VQE(VariationalAlgorithm, MinimumEigensolver):
         weights: np.ndarray,
     ) -> Callable[[np.ndarray], np.ndarray]:
 
+        def _evaluate_one(gradient, ansatz, operator, parameters):
+            job = gradient.run([ansatz], [operator], [parameters.tolist()])
+            return job.result().gradients[0]
+
         def evaluate_gradient(parameters: np.ndarray) -> np.ndarray:
             try:
                 gradient = self.gradient
-
-                # Use the user-provided gradient, or construct one if absent
                 if gradient is None:
                     gradient = ParamShiftEstimatorGradient(self.estimator)
 
-                gradients = []
-                for ansatz in ansatze:
-                    job = gradient.run([ansatz], [operator], [parameters.tolist()])
-                    gradients.append(job.result().gradients[0])
+                with ThreadPoolExecutor(max_workers=len(ansatze)) as executor:
+                    futures = [executor.submit(_evaluate_one, gradient, ansatz, operator, parameters)
+                                for ansatz in ansatze]
+    
+                    gradients = [future.result() for future in futures]
 
             except Exception as exc:
                 raise AlgorithmError(
                     "The primitive job to evaluate the SS-VQE gradient failed!"
                 ) from exc
 
-            # Shape: (number of reference states, number of parameters)
             gradients = np.asarray(gradients)
-
-            # Weighted sum over reference states
-            cost_gradient = np.sum(np.asarray(weights)[:, None] * gradients, axis=0)
+            cost_gradient = np.sum(np.asarray(weights)[:, None] * gradients,
+                            axis=0)
 
             return cost_gradient
 

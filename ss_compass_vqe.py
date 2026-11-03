@@ -1,13 +1,15 @@
-from ss_vqe import SS_VQE,SS_VQEResult
+from ss_vqe import SS_VQE
 import warnings
 warnings.filterwarnings("ignore")
+from datetime import datetime
+from time import perf_counter
 from typing import Any, cast
 
 import multiprocessing as mp
 from collections import defaultdict
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from itertools import combinations
-from math import comb
+import os
 
 from pyscf import ci, mcscf, cc
 from pyscf.fci import cistring, direct_spin1
@@ -16,13 +18,10 @@ from qiskit.circuit.library import StatePreparation
 import numpy as np
 from qiskit import transpile as qk_transpile
 from qiskit.primitives import StatevectorEstimator
-from qiskit_algorithms import VQE
 from qiskit_algorithms.optimizers import COBYLA, L_BFGS_B
-from qiskit.circuit import Parameter, QuantumCircuit
+from qiskit.circuit import QuantumCircuit
 from qiskit.circuit.library import EvolvedOperatorAnsatz
-from qiskit.transpiler import PassManager
 from qiskit.quantum_info import Statevector
-from qiskit.quantum_info import SparsePauliOp
 from qiskit_algorithms import NumPyEigensolver
 
 # Qiskit Nature: electronic structure
@@ -40,69 +39,21 @@ from qiskit_nature.second_q.circuit.library import HartreeFock, UCC
 # Ground-state solver interface
 from qiskit_nature.second_q.algorithms import ExcitedStatesEigensolver
 
-# def _Sh_ex(num_spatial_orbitals=None, num_particles=None, **kwargs):
-#     if num_spatial_orbitals is None:
-#         num_spatial_orbitals = kwargs["num_spin_orbitals"]
-#     return [
-#         ((6,0),(8,1)),  ((6,1),(8,1)),  ((6,0),(9,1)),  ((6,1),(9,1)),
-#         ((6,0),(10,1)), ((6,1),(10,1)), ((6,0),(11,1)), ((6,1),(11,1)),
-#         ((7,0),(8,1)),  ((7,1),(8,1)),  ((7,0),(9,1)),  ((7,1),(9,1)),
-#         ((7,0),(10,1)), ((7,1),(10,1)), ((7,0),(11,1)), ((7,1),(11,1)),
-#         ((0,6),(2,7)),  ((0,7),(2,7)),  ((0,6),(3,7)),  ((0,7),(3,7)),
-#         ((0,6),(4,7)),  ((0,7),(4,7)),  ((0,6),(5,7)),  ((0,7),(5,7)),
-#         ((1,6),(2,7)),  ((1,7),(2,7)),  ((1,6),(3,7)),  ((1,7),(3,7)),
-#         ((1,6),(4,7)),  ((1,7),(4,7)),  ((1,6),(5,7)),  ((1,7),(5,7)),
-#     ]
-
-# def _Sp_ex(num_spatial_orbitals=None, num_particles=None, **kwargs):
-#     if num_spatial_orbitals is None:
-#         num_spatial_orbitals = kwargs["num_spin_orbitals"]
-#     return [
-#         ((6,2),(8,2)),  ((6,2),(8,3)),  ((6,2),(8,4)),  ((6,2),(8,5)),
-#         ((6,2),(9,2)),  ((6,2),(9,3)),  ((6,2),(9,4)),  ((6,2),(9,5)),
-#         ((6,2),(10,2)), ((6,2),(10,3)), ((6,2),(10,4)), ((6,2),(10,5)),
-#         ((6,2),(11,2)), ((6,2),(11,3)), ((6,2),(11,4)), ((6,2),(11,5)),
-#         ((7,2),(8,2)),  ((7,2),(8,3)),  ((7,2),(8,4)),  ((7,2),(8,5)),
-#         ((7,2),(9,2)),  ((7,2),(9,3)),  ((7,2),(9,4)),  ((7,2),(9,5)),
-#         ((7,2),(10,2)), ((7,2),(10,3)), ((7,2),(10,4)), ((7,2),(10,5)),
-#         ((7,2),(11,2)), ((7,2),(11,3)), ((7,2),(11,4)), ((7,2),(11,5)),
-#         ((0,8),(2,8)),  ((0,8),(2,9)),  ((0,8),(2,10)), ((0,8),(2,11)),
-#         ((0,8),(3,8)),  ((0,8),(3,9)),  ((0,8),(3,10)), ((0,8),(3,11)),
-#         ((0,8),(4,8)),  ((0,8),(4,9)),  ((0,8),(4,10)), ((0,8),(4,11)),
-#         ((0,8),(5,8)),  ((0,8),(5,9)),  ((0,8),(5,10)), ((0,8),(5,11)),
-#         ((1,8),(2,8)),  ((1,8),(2,9)),  ((1,8),(2,10)), ((1,8),(2,11)),
-#         ((1,8),(3,8)),  ((1,8),(3,9)),  ((1,8),(3,10)), ((1,8),(3,11)),
-#         ((1,8),(4,8)),  ((1,8),(4,9)),  ((1,8),(4,10)), ((1,8),(4,11)),
-#         ((1,8),(5,8)),  ((1,8),(5,9)),  ((1,8),(5,10)), ((1,8),(5,11)),
-#     ]
-
-from itertools import combinations, product
-
 def _Sh_ex(num_spatial_orbitals=None, num_particles=None, **kwargs):
     if num_spatial_orbitals is None:
         num_spatial_orbitals = kwargs["num_spin_orbitals"]
 
     n = num_spatial_orbitals
-    if num_particles is not None:
-            n_alpha, n_beta = num_particles
-    else:
-        n_alpha,n_beta = (0,0)
+    if num_particles is None:
+        raise ValueError("num_particles must be provided for _Sh_ex.")
 
-    # Occupied and virtual spin orbitals, assuming alpha orbitals first
+    n_alpha, n_beta = num_particles
+
     occupied = list(range(n_alpha)) + list(range(n, n + n_beta))
     virtual = [i for i in range(2 * n) if i not in occupied]
 
     excitations = []
 
-    # Spin-conserving single excitations
-    for i in occupied:
-        for a in virtual:
-            if i % n == a % n:
-                continue
-            if (i < n) == (a < n):
-                excitations.append(((i,), (a,)))
-
-    # Spin-conserving double excitations
     for occ in combinations(occupied, 2):
         for virt in combinations(virtual, 2):
             if sum(i < n for i in occ) != sum(a < n for a in virt):
@@ -112,23 +63,21 @@ def _Sh_ex(num_spatial_orbitals=None, num_particles=None, **kwargs):
 
     return excitations
 
-
 def _Sp_ex(num_spatial_orbitals=None, num_particles=None, **kwargs):
     if num_spatial_orbitals is None:
         num_spatial_orbitals = kwargs["num_spin_orbitals"]
 
     n = num_spatial_orbitals
-    if num_particles is not None:
-        n_alpha, n_beta = num_particles
-    else:
-        n_alpha,n_beta = (0,0)
+    if num_particles is None:
+        raise ValueError("num_particles must be provided for _Sp_ex.")
+
+    n_alpha, n_beta = num_particles
 
     occupied = list(range(n_alpha)) + list(range(n, n + n_beta))
     virtual = [i for i in range(2 * n) if i not in occupied]
 
     excitations = []
 
-    # Spin-conserving double excitations
     for occ in combinations(occupied, 2):
         for virt in combinations(virtual, 2):
             if sum(i < n for i in occ) != sum(a < n for a in virt):
@@ -251,13 +200,24 @@ def _mapped_bitstring(occ, enc, n_qubits):
     return _solve_gf2(np.array(A), np.array(y, dtype=np.uint8))
   
 # ----------------
+# Timestamped progress logging
+# ----------------
+def _progress(message: str, start_time: float | None = None) -> None:
+    stamp = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
+    elapsed = "" if start_time is None else f" | elapsed {perf_counter() - start_time:,.1f} s"
+    print(f"[{stamp}{elapsed}] [SS-COMPASS] {message}", flush=True)
+# ----------------
 # Main Callable
 # ----------------
 def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states: int, weights: list,
-                   method: str = "HartreeFock",  threshold: list = [1e-5,1e-5],active_space: list | None = None,
-                   N_workers: int | None = None, s_weights: list | None = None,
-                  ) -> dict | None:
+                   method: str = "HartreeFock",  threshold: list = [1e-5,5e-6],active_space: list | None = None,
+                    s_weights: list | None = None) -> dict|None:
 
+    run_start = perf_counter()
+    _progress(f"Run started | geometry={d_eq} Å | basis={basis_set} | states={no_init_states}")
+
+    N_workers = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else (os.cpu_count() or 1)
+    
     if s_weights is None:
         s_weights = weights[::-1]
 
@@ -275,10 +235,6 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
     if np.any(threshold_array < 0):
         raise ValueError("Screening thresholds must be non-negative.")
     
-    if active_space is None:
-            active_space = [1, 2, 7, 8]
-    active_space_set = set(active_space)
-
     # spawn creates fully fresh worker processes — avoids deadlocks from BLAS/Aer
     # C++ threads that are already running in the parent when the pool is created.
     # (fork inherits the parent's thread lock state without the actual threads,
@@ -289,6 +245,8 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
     # ------------------------------------------------------------------
     # 1. Molecular system setup
     # ------------------------------------------------------------------
+    stage_start = perf_counter()
+    _progress("Stage 1/8: running PySCF driver and applying frozen-core transformation", run_start)
     driver = PySCFDriver(atom= coordinates,charge= 0,spin =0,basis = basis_set)
     es_problem = cast(ElectronicStructureProblem, driver.run())
     es_problem = cast(ElectronicStructureProblem,
@@ -306,10 +264,24 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
         num_pa = 0
     ncore = mf.mol.nelectron // 2 - num_pa[0]
 
-    # Constant energy contributions excluded from the qubit Hamiltonian
-    shift = float(np.real(sum(es_problem.hamiltonian.constants.values())))
+    # Energy contributions omitted from the mapped active-space Hamiltonian.
+    energy_constants = es_problem.hamiltonian.constants
+    shift = float(np.real(sum(energy_constants.values())))
 
-    num_spatial_orbitals = int(cast(Any, es_problem.num_spatial_orbitals))  
+    nuclear_repulsion_energy = es_problem.nuclear_repulsion_energy
+    if nuclear_repulsion_energy is None:
+        raise ValueError("Nuclear repulsion energy is unavailable")
+    nuclear_repulsion = float(nuclear_repulsion_energy)
+    print(f"[Energy check] Nuclear repulsion: {nuclear_repulsion:.12f} Ha")
+    print(f"[Energy check] Hamiltonian constants: {energy_constants}")
+    print(f"[Energy check] Total constant shift: {shift:.12f} Ha")
+
+    num_spatial_orbitals = int(cast(Any, es_problem.num_spatial_orbitals))
+    if active_space is None:
+        active_space_set = set(range(num_spatial_orbitals))
+    else:
+        active_space_set = set(active_space)
+    _progress(f"Molecular Hamiltonian ready | spatial orbitals={num_spatial_orbitals} | particles={num_particles} | setup took {perf_counter()-stage_start:.1f} s", run_start)
 
     def _init_states(method, no_init_states, num_spatial_orbitals, num_particles, qubit_mapper):
 
@@ -381,11 +353,14 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
             circuits.append(qc)
         return circuits
 
+    stage_start = perf_counter()
+    _progress("Stage 2/8: constructing reference states", run_start)
     init_states = _init_states(method, no_init_states,num_spatial_orbitals,num_pa, mapper)
         # Initial reference-state energies E_i^(0)
     initial_energies = _state_energies(StatevectorEstimator(), init_states, qubit_op, shift=shift)
     print("[SS-COMPASS] Initial reference-state energies:")
-    print(initial_energies)
+    print(initial_energies, flush=True)
+    _progress(f"Reference states ready | took {perf_counter()-stage_start:.1f} s", run_start)
 
     # Force circuit construction before sending it to worker processes
     _ = init_states[0].num_qubits
@@ -397,21 +372,31 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
     # ------------------------------------------------------------------
     # 3. Exact (NumPy / FCI) energy spectrum
     # ------------------------------------------------------------------
+    stage_start = perf_counter()
+    _progress("Stage 3/8: computing exact active-space eigenvalues", run_start)
+
     numpy_solver = NumPyEigensolver(
         k=no_init_states,
         filter_criterion=cast(Any, es_problem.get_default_filter_criterion())
     )
     calc = ExcitedStatesEigensolver(mapper, numpy_solver)
     exact_result = calc.solve(es_problem)
+
     if exact_result.eigenvalues is not None:
-        exact_energies = np.real(exact_result.eigenvalues)
+        exact_electronic_energies = np.real(exact_result.eigenvalues)
+        exact_energies = exact_electronic_energies + shift
     else:
         raise RuntimeError("The FCI calculation didn't return any eigenvalues.")
-    print(f"First {len(exact_energies)} FCI eigenvalues:")
-    print(exact_energies)
+
+    print(f"First {len(exact_energies)} FCI total energies:")
+    print(exact_energies, flush=True)
+
+    _progress(f"Exact spectrum ready | took {perf_counter()-stage_start:.1f} s", run_start)
     # ------------------------------------------------------------------
     # 4. Build operator pools
     # ------------------------------------------------------------------
+    stage_start = perf_counter()
+    _progress("Stage 4/8: constructing S/T2 operator pools", run_start)
     ucc_s = UCC(num_particles=num_particles,
         num_spatial_orbitals=es_problem.num_spatial_orbitals,
         excitations="s",initial_state=init_state,qubit_mapper=mapper)
@@ -441,6 +426,7 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
     if sp_excitations is None:
         raise ValueError("The UCC particle-excitation pool is empty")
     sp_paulis = _build_pauli_ops(ucc_sp, mapper)
+    _progress(f"Operator pools ready | S={len(s_paulis)} T2={len(t2_paulis)} Sh={len(sh_paulis)} Sp={len(sp_paulis)} | took {perf_counter()-stage_start:.1f} s", run_start)
 
     #----------------------------------
     # 5. T2 screening
@@ -457,11 +443,30 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
             for i in range(n_t2)]
     print(f"[SS-COMPASS] Screening {n_t2} T2 operators for {n_states} reference states ...")
 
-    t2_raw = [_t2_screen_worker(args) for args in t2_args]
-    t2_screen = sorted([(score, idx, theta, energies) for idx, score, theta, energies in t2_raw if abs(score) > threshold_array[0]],
-            key=lambda item: abs(item[0]), reverse=True)
+    stage_start = perf_counter()
+    t2_raw = []
+    n_workers = min(N_workers, len(t2_args))
+
+    _progress(f"T2 screening started | workers={n_workers}", run_start)
+
+    with ProcessPoolExecutor(max_workers=n_workers, mp_context=_ctx) as executor:
+        futures = [executor.submit(_t2_screen_worker, args) for args in t2_args]
+
+        for i, future in enumerate(as_completed(futures), 1):
+            t2_raw.append(future.result())
+
+            if i == 1 or i % max(1, n_t2 // 20) == 0 or i == n_t2:
+                _progress(f"T2 screening: {i}/{n_t2} ({100*i/n_t2:.1f}%)", run_start)
+
+    t2_screen = sorted([(score, idx, theta, energies)
+            for idx, score, theta, energies in t2_raw
+            if abs(score) > threshold_array[0]],
+            key=lambda item: abs(item[0]),
+            reverse=True)
  
-    print(f"[SS-COMPASS] {len(t2_screen)} T2 operators passed screening (threshold = {threshold_array[0]}).\n")
+    _progress(f"T2 screening complete | accepted={len(t2_screen)}/{n_t2} "
+            f"| stage took {perf_counter()-stage_start:.1f} s",
+            run_start)
 
     # ------------------------------------------------------------------
     # 6. Determine S-operator candidates (pure Python — no VQE needed)
@@ -485,37 +490,62 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
         sp_seen = set()
         for act_orb in active_in_t2:
             for j, sh_ex in enumerate(sh_excitations):
-                if j not in sh_seen and sh_ex[1][1] == act_orb:
+                if j not in sh_seen and act_orb in sh_ex[1]:
                     s_candidates.append((len(s_candidates), rank, t2_idx, 'h', j, theta_t2, t2_energies))
                     sh_seen.add(j)
             for j, sp_ex in enumerate(sp_excitations):
-                if j not in sp_seen and sp_ex[0][1] == act_orb:
+                if j not in sp_seen and act_orb in sp_ex[0]:
                     s_candidates.append((len(s_candidates), rank, t2_idx, 'p', j, theta_t2, t2_energies))
                     sp_seen.add(j)
     # ------------------------------------------------------------------
     # 7. Build and screen S-hole / S-particle candidates
+    #    Global dynamic scheduling across all T2 operators:
+    #    workers pull independent (T2, S) screening tasks from one queue.
     # ------------------------------------------------------------------
     if s_candidates:
         n_s = len(s_candidates)
 
         print(f"[SS-COMPASS] Pre-compiling {n_s} S circuits for {n_states} reference states ...")
-        selected_s_paulis = [sh_paulis[s_idx] if s_type == "h" else sp_paulis[s_idx]
-                    for _, rank, t2_idx, s_type, s_idx, theta_t2, t2_energies in s_candidates]
-        s_ansatze = [[EvolvedOperatorAnsatz(operators=[t2_paulis[t2_idx], s_pauli], initial_state=ref)
-                     for ref in init_states]
-                    for (_, rank, t2_idx, s_type, s_idx, theta_t2, t2_energies), s_pauli
-                    in zip(s_candidates, selected_s_paulis)]
-        s_transpiled_list = [qk_transpile(cast(list[QuantumCircuit], ansatze), optimization_level=1)
-                    for ansatze in s_ansatze]
-        s_args = [(cand_idx, qubit_op, s_transpiled_list[ci], shift, weights_array,
-                     s_weights_array, t2_energies, theta_t2)
-                    for ci, (cand_idx, rank, t2_idx, s_type, s_idx, theta_t2, t2_energies)
-                    in enumerate(s_candidates)]
-        print(f"[SS-COMPASS] Screening {n_s} S candidates serially ...")
 
-        s_raw = [_s_screen_worker(args) for args in s_args]
+        selected_s_paulis = [sh_paulis[s_idx] if s_type == "h" else sp_paulis[s_idx]
+                             for _, rank, t2_idx, s_type, s_idx, theta_t2, t2_energies in s_candidates]
+
+        s_ansatze = [[EvolvedOperatorAnsatz(operators=[t2_paulis[t2_idx], s_pauli], initial_state=ref)
+                      for ref in init_states]
+                     for (_, rank, t2_idx, s_type, s_idx, theta_t2, t2_energies), s_pauli
+                     in zip(s_candidates, selected_s_paulis)]
+
+        s_transpiled_list = [qk_transpile(cast(list[QuantumCircuit], ansatze), optimization_level=1)
+                             for ansatze in s_ansatze]
+
+        s_args = [(cand_idx, qubit_op, s_transpiled_list[ci], shift, weights_array, s_weights_array,
+                   t2_energies, theta_t2)
+                  for ci, (cand_idx, rank, t2_idx, s_type, s_idx, theta_t2, t2_energies)
+                  in enumerate(s_candidates)]
+
+        n_workers = min(N_workers, len(s_args))
+        print(f"[SS-COMPASS] Screening {n_s} S candidates across all T2 operators using {n_workers} workers ...")
+
+        stage_start = perf_counter()
+        s_raw = []
+
+        # Submit all independent (T2, S) tasks to one shared worker pool.
+        # Workers dynamically take the next available task as they finish.
+        with ProcessPoolExecutor(max_workers=n_workers, mp_context=_ctx) as executor:
+            futures = [executor.submit(_s_screen_worker, args) for args in s_args]
+
+            for i, future in enumerate(as_completed(futures), 1):
+                s_raw.append(future.result())
+
+                if i == 1 or i % max(1, n_s // 20) == 0 or i == n_s:
+                    _progress(f"S screening: {i}/{n_s} ({100 * i / n_s:.1f}%)", run_start)
+
+        _progress(f"S screening complete | screened={n_s} | workers={n_workers} "
+                  f"| stage took {perf_counter() - stage_start:.1f} s", run_start)
+
         s_results = {cand_idx: (score, theta_s, state_energies)
                      for cand_idx, score, theta_s, state_energies in s_raw}
+
     else:
         s_results = {}
 
@@ -563,17 +593,24 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
     
     _print_ansatz(final_op_info)
 
+    stage_start = perf_counter()
+    _progress("Stage 8/8: building final ansatz and starting global SS-VQE optimization", run_start)
     final_ansatze = [EvolvedOperatorAnsatz(final_paulis, initial_state=ref) for ref in init_states]
     final_transpiled = qk_transpile(cast(list[QuantumCircuit], final_ansatze), optimization_level=1)
+    def _opt_callback(eval_count, params, cost, metadata):
+        _progress(f"Optimizer evaluation {eval_count} | weighted cost={float(np.real(cost)):.10f} Ha", run_start)
+
     final_ss = SS_VQE(StatevectorEstimator(), final_transpiled, weights_array, optimizer,
-                      initial_point=ini_pt)
+                      initial_point=ini_pt, callback=_opt_callback)
     final_result = final_ss.compute_minimum_eigenvalue(cast(Any,qubit_op))
+    _progress(f"Global optimization finished | evaluations={final_result.cost_function_evals} | stage took {perf_counter()-stage_start:.1f} s", run_start)
     # per-reference-state energies at the optimum (weighted cost alone hides these)
     state_energies = _state_energies(StatevectorEstimator(), final_result.optimal_circuits, qubit_op, shift=shift)
     print(f"geom- {d_eq}  parameters- {len(final_opt_t)}")
     for i, (e, ex) in enumerate(zip(state_energies, exact_energies)):
-        print(f"  state {i}: SS-COMPASS {e:.8f}   exact {ex:.8f}   err {abs(e - ex):.2e}")
+        print(f"  state {i}: SS-COMPASS {e:.8f}   FCI {ex:.8f}   err {e - ex:.2e} Ha")
 
+    _progress(f"Run complete | total elapsed {perf_counter()-run_start:.1f} s", run_start)
     return {
         'geometry': d_eq,
         'energies': state_energies,

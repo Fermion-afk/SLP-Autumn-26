@@ -1,40 +1,47 @@
-from ss_compass_vqe_timestamped import ss_compass_vqe
+from ss_compass_vqe import ss_compass_vqe
+import multiprocessing as mp
 
-# -------------------- Molecular system --------------------
 
-bond_length = 1.326
-basis_set = "sto-3g"
+def main():
+    # -------------------- Molecular system --------------------
 
-coordinates = "\n".join([
-    "Be  0.000000  0.000000  0.000000",
-    f"H   0.000000  0.000000  {bond_length:.6f}",
-    f"H   0.000000  0.000000  {-bond_length:.6f}",
-])
+    bond_length = 1.326
+    basis_set = "sto-3g"
 
-# Check the exact geometry string passed to PySCF
-print("Geometry passed to PySCFDriver:")
-print(repr(coordinates))
-print(coordinates)
+    coordinates = "\n".join([
+        "Be  0.000000  0.000000  0.000000",
+        f"H   0.000000  0.000000  {bond_length:.6f}",
+        f"H   0.000000  0.000000  {-bond_length:.6f}",
+    ])
 
-# -------------------- SS-Compass-VQE parameters --------------------
+    print("Geometry passed to PySCFDriver:")
+    print(repr(coordinates))
+    print(coordinates)
 
-num_states = 4
-weights = [10.0, 1.5, 1.0, 0.5]
+    # -------------------- SS-Compass-VQE parameters --------------------
 
-active_space = [1, 2, 7, 8]
-method = "HartreeFock"
+    num_states = 3
+    weights = [50, 50, 1]
 
-# -------------------- Run SS-Compass-VQE --------------------
+    active_space = [1, 2, 7, 8]
+    method = "HartreeFock"
 
-result = ss_compass_vqe(
-    coordinates=coordinates,
-    basis_set=basis_set,
-    weights=weights,
-    active_space=active_space,
-    method=method,
-    d_eq=bond_length,
-    no_init_states=num_states,
-)
+    # -------------------- Run SS-Compass-VQE --------------------
 
-print("\nSS-Compass-VQE result:")
-print(result)
+    result = ss_compass_vqe(
+        coordinates=coordinates,
+        basis_set=basis_set,
+        weights=weights,
+        active_space=active_space,
+        method=method,
+        d_eq=bond_length,
+        no_init_states=num_states,
+    )
+
+    print("\nSS-Compass-VQE result:")
+    print(result)
+
+
+if __name__ == "__main__":
+    mp.freeze_support()
+    main()
