@@ -219,7 +219,8 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
     N_workers = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else (os.cpu_count() or 1)
     
     if s_weights is None:
-        s_weights = weights[::-1]
+        sum_w = sum(w for w in weights)
+        s_weights = [weight / sum_w for weight in weights[::-1]]
 
     if threshold is None or len(threshold) != 2:
         raise ValueError("threshold must be a length-2 list: [T2_threshold, S_threshold].")
@@ -364,6 +365,7 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
 
     # Force circuit construction before sending it to worker processes
     _ = init_states[0].num_qubits
+    print(f"Number of qubits:{init_states[0].num_qubits}")
     # ------------------------------------------------------------------
     # 2. Hartree-Fock energy
     # ------------------------------------------------------------------
