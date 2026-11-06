@@ -33,8 +33,8 @@ bond_length = 1.595
 basis_set = "sto-3g"
 coordinates = f"Li 0.0 0.0 0.0\nH 0.0 0.0 {bond_length:.6f}"
 
-num_states = 3
-weights = np.array([50.0, 25.0, 1.0])
+num_states = 4
+weights = np.array([10.0,5.0,0.5,0.5])
 
 maxiter = 10_000
 maxfun = 200_000

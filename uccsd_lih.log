@@ -1,0 +1,8 @@
+[2026-11-06 16:16:07 IST | elapsed 0.0 s] Run started | LiH | bond length=1.595000 Å | basis=sto-3g
+[2026-11-06 16:16:08 IST | elapsed 1.0 s] Hamiltonian ready | orbitals=5 | particles=(1, 1) | qubits=10 | shift=-6.802973550012 Ha
+[2026-11-06 16:16:08 IST | elapsed 1.0 s] Prepared 4 determinant reference states
+[2026-11-06 16:16:08 IST | elapsed 1.1 s] UCCSD pool ready | singles=8 | doubles=16 | parameters=24
+[2026-11-06 16:16:09 IST | elapsed 1.4 s] Starting SS-VQE optimization
+[2026-11-06 16:16:35 IST | elapsed 28.3 s] Evaluation     1 | weighted cost = -16.000772063917 Ha
+[2026-11-06 16:24:43 IST | elapsed 515.6 s] Evaluation     2 | weighted cost = -12.169570467787 Ha
+[2026-11-06 16:33:23 IST | elapsed 1,036.1 s] Evaluation     3 | weighted cost = -16.276950674634 Ha
