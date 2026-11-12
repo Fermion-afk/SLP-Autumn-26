@@ -1,2 +1,0 @@
-# SLP Autumn '26
-
