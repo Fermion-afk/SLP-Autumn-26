@@ -1,0 +1,184 @@
+Run started: 2026-11-06T20:10:17
+Logging to: /home/theomolsci/Desktop/Rithvik/SLP-Autumn-26/HeH+_2026-11-06_20-10-17.log
+
+Geometry passed to PySCFDriver:
+He  0.000000  0.000000  0.000000
+H   0.000000  0.000000  0.774300
+
+Basis set: 6-31g
+
+SS-Compass-VQE parameters:
+Number of states: 4
+Weights: [10.0, 2.0, 2.0, 0.5]
+Active space: [1, 2, 3, 4]
+Method: HartreeFock
+
+Starting SS-Compass-VQE calculation...
+
+[2026-11-06 20:10:17 IST] [SS-COMPASS] Run started | geometry=0.7743 Å | basis=6-31g | states=4
+[2026-11-06 20:10:17 IST | elapsed 0.0 s] [SS-COMPASS] Stage 1/8: running PySCF driver and applying frozen-core transformation
+[Energy check] Nuclear repulsion: 1.366853185897 Ha
+[Energy check] Hamiltonian constants: {'nuclear_repulsion_energy': np.float64(1.3668531858969393), 'FreezeCoreTransformer': np.float64(0.0)}
+[Energy check] Total constant shift: 1.366853185897 Ha
+[2026-11-06 20:10:18 IST | elapsed 0.7 s] [SS-COMPASS] Molecular Hamiltonian ready | spatial orbitals=4 | particles=(1, 1) | setup took 0.7 s
+[2026-11-06 20:10:18 IST | elapsed 0.7 s] [SS-COMPASS] Stage 2/8: constructing reference states
+[SS-COMPASS] Initial reference-state energies:
+[-2.90983935 -1.97518121 -1.97518121 -1.33091412]
+[2026-11-06 20:10:18 IST | elapsed 0.9 s] [SS-COMPASS] Reference states ready | took 0.2 s
+Number of qubits:8
+[2026-11-06 20:10:18 IST | elapsed 0.9 s] [SS-COMPASS] Stage 3/8: computing exact active-space eigenvalues
+First 4 FCI total energies:
+[-2.93230081 -1.96699341 -1.35391928 -0.66796586]
+[2026-11-06 20:10:19 IST | elapsed 1.9 s] [SS-COMPASS] Exact spectrum ready | took 1.0 s
+[2026-11-06 20:10:19 IST | elapsed 1.9 s] [SS-COMPASS] Stage 4/8: constructing S/T2 operator pools
+[2026-11-06 20:10:19 IST | elapsed 2.1 s] [SS-COMPASS] Operator pools ready | S=6 T2=9 Sh=9 Sp=9 | took 0.1 s
+[SS-COMPASS] Pre-compiling 9 T2 operators for 4 reference states ...
+[SS-COMPASS] Screening 9 T2 operators for 4 reference states ...
+[2026-11-06 20:10:19 IST | elapsed 2.2 s] [SS-COMPASS] T2 screening started | workers=9
+[2026-11-06 20:11:16 IST | elapsed 58.5 s] [SS-COMPASS] T2 screening: 1/9 (11.1%)
+[2026-11-06 20:11:16 IST | elapsed 58.5 s] [SS-COMPASS] T2 screening: 2/9 (22.2%)
+[2026-11-06 20:11:25 IST | elapsed 68.3 s] [SS-COMPASS] T2 screening: 3/9 (33.3%)
+[2026-11-06 20:11:26 IST | elapsed 69.2 s] [SS-COMPASS] T2 screening: 4/9 (44.4%)
+[2026-11-06 20:11:27 IST | elapsed 69.8 s] [SS-COMPASS] T2 screening: 5/9 (55.6%)
+[2026-11-06 20:11:27 IST | elapsed 70.0 s] [SS-COMPASS] T2 screening: 6/9 (66.7%)
+[2026-11-06 20:11:27 IST | elapsed 70.1 s] [SS-COMPASS] T2 screening: 7/9 (77.8%)
+[2026-11-06 20:11:28 IST | elapsed 70.5 s] [SS-COMPASS] T2 screening: 8/9 (88.9%)
+[2026-11-06 20:11:28 IST | elapsed 70.8 s] [SS-COMPASS] T2 screening: 9/9 (100.0%)
+[2026-11-06 20:11:29 IST | elapsed 71.4 s] [SS-COMPASS] T2 screening complete | accepted=7/9 | stage took 69.1 s
+[SS-COMPASS] Pre-compiling 84 S circuits for 4 reference states ...
+[SS-COMPASS] Screening 84 S candidates across all T2 operators using 12 workers ...
+[2026-11-06 20:14:16 IST | elapsed 238.8 s] [SS-COMPASS] S screening: 1/84 (1.2%)
+[2026-11-06 20:14:42 IST | elapsed 265.2 s] [SS-COMPASS] S screening: 4/84 (4.8%)
+[2026-11-06 20:14:46 IST | elapsed 269.1 s] [SS-COMPASS] S screening: 8/84 (9.5%)
+[2026-11-06 20:14:52 IST | elapsed 275.0 s] [SS-COMPASS] S screening: 12/84 (14.3%)
+[2026-11-06 20:17:53 IST | elapsed 456.0 s] [SS-COMPASS] S screening: 16/84 (19.0%)
+[2026-11-06 20:18:05 IST | elapsed 467.8 s] [SS-COMPASS] S screening: 20/84 (23.8%)
+[2026-11-06 20:18:15 IST | elapsed 478.2 s] [SS-COMPASS] S screening: 24/84 (28.6%)
+[2026-11-06 20:21:02 IST | elapsed 644.9 s] [SS-COMPASS] S screening: 28/84 (33.3%)
+[2026-11-06 20:21:29 IST | elapsed 671.6 s] [SS-COMPASS] S screening: 32/84 (38.1%)
+[2026-11-06 20:21:44 IST | elapsed 686.8 s] [SS-COMPASS] S screening: 36/84 (42.9%)
+[2026-11-06 20:24:02 IST | elapsed 825.2 s] [SS-COMPASS] S screening: 40/84 (47.6%)
+[2026-11-06 20:24:43 IST | elapsed 866.1 s] [SS-COMPASS] S screening: 44/84 (52.4%)
+[2026-11-06 20:25:16 IST | elapsed 898.7 s] [SS-COMPASS] S screening: 48/84 (57.1%)
+[2026-11-06 20:27:24 IST | elapsed 1,026.8 s] [SS-COMPASS] S screening: 52/84 (61.9%)
+[2026-11-06 20:28:07 IST | elapsed 1,069.9 s] [SS-COMPASS] S screening: 56/84 (66.7%)
+[2026-11-06 20:28:48 IST | elapsed 1,111.3 s] [SS-COMPASS] S screening: 60/84 (71.4%)
+[2026-11-06 20:30:45 IST | elapsed 1,228.2 s] [SS-COMPASS] S screening: 64/84 (76.2%)
+[2026-11-06 20:31:23 IST | elapsed 1,265.6 s] [SS-COMPASS] S screening: 68/84 (81.0%)
+[2026-11-06 20:32:11 IST | elapsed 1,314.2 s] [SS-COMPASS] S screening: 72/84 (85.7%)
+[2026-11-06 20:33:37 IST | elapsed 1,400.0 s] [SS-COMPASS] S screening: 76/84 (90.5%)
+[2026-11-06 20:34:43 IST | elapsed 1,465.5 s] [SS-COMPASS] S screening: 80/84 (95.2%)
+[2026-11-06 20:35:27 IST | elapsed 1,509.3 s] [SS-COMPASS] S screening: 84/84 (100.0%)
+[2026-11-06 20:35:27 IST | elapsed 1,510.3 s] [SS-COMPASS] S screening complete | screened=84 | workers=12 | stage took 1438.2 s
+[SS-COMPASS] 52 S operators passed screening (threshold = 5e-06).
+
+[SS-COMPASS] Final ansatz contains 65 operators and 65 parameters across 4 reference states.
+
+===========================================================================
+SS_COMPASS-VQE Final Ansatz  —  65 operator(s)
+===========================================================================
+     #  Type            Excitation                                  θ_init
+  ————  ——————————————  ——————————————————————————————————————  ——————————
+     1  T2              ((0, 4), (3, 7))                         -0.044214
+     2  S-hole          ((0, 4), (3, 5))                         -0.032842
+     3  S-particle      ((0, 4), (1, 5))                         -0.039395
+     4  S-particle      ((0, 4), (1, 6))                         -0.014800
+     5  S-particle      ((0, 4), (1, 7))                         -0.032842
+     6  S-particle      ((0, 4), (2, 5))                         -0.014800
+     7  S-particle      ((0, 4), (2, 6))                         -0.017185
+     8  S-particle      ((0, 4), (3, 5))                         -0.032842
+     9  T2              ((0, 4), (1, 5))                         -0.040666
+    10  S-hole          ((0, 4), (1, 6))                         -0.016782
+    11  S-hole          ((0, 4), (1, 7))                         -0.033706
+    12  S-particle      ((0, 4), (1, 6))                         -0.016782
+    13  S-particle      ((0, 4), (1, 7))                         -0.033706
+    14  S-particle      ((0, 4), (2, 5))                         -0.016782
+    15  S-particle      ((0, 4), (2, 6))                         -0.016792
+    16  S-particle      ((0, 4), (3, 5))                         -0.033706
+    17  S-particle      ((0, 4), (3, 7))                         -0.043613
+    18  T2              ((0, 4), (3, 5))                         -0.031050
+    19  S-hole          ((0, 4), (3, 7))                         -0.045184
+    20  S-particle      ((0, 4), (1, 5))                         -0.043407
+    21  S-particle      ((0, 4), (1, 6))                         -0.014476
+    22  S-particle      ((0, 4), (1, 7))                         -0.030431
+    23  S-particle      ((0, 4), (2, 5))                         -0.013961
+    24  S-particle      ((0, 4), (2, 6))                         -0.017606
+    25  S-particle      ((0, 4), (3, 7))                         -0.045184
+    26  T2              ((0, 4), (1, 7))                         -0.031050
+    27  S-hole          ((0, 4), (1, 5))                         -0.043407
+    28  S-hole          ((0, 4), (1, 6))                         -0.013961
+    29  S-particle      ((0, 4), (1, 5))                         -0.043407
+    30  S-particle      ((0, 4), (1, 6))                         -0.013961
+    31  S-particle      ((0, 4), (2, 5))                         -0.014476
+    32  S-particle      ((0, 4), (2, 6))                         -0.017606
+    33  S-particle      ((0, 4), (3, 5))                         -0.030431
+    34  S-particle      ((0, 4), (3, 7))                         -0.045184
+    35  T2              ((0, 4), (2, 6))                         -0.017859
+    36  S-hole          ((0, 4), (2, 5))                         -0.015403
+    37  S-particle      ((0, 4), (1, 5))                         -0.039961
+    38  S-particle      ((0, 4), (1, 6))                         -0.015403
+    39  S-particle      ((0, 4), (1, 7))                         -0.030881
+    40  S-particle      ((0, 4), (2, 5))                         -0.015403
+    41  S-particle      ((0, 4), (3, 5))                         -0.030881
+    42  S-particle      ((0, 4), (3, 7))                         -0.043990
+    43  T2              ((0, 4), (1, 6))                         -0.014978
+    44  S-hole          ((0, 4), (1, 5))                         -0.041578
+    45  S-hole          ((0, 4), (1, 7))                         -0.030615
+    46  S-particle      ((0, 4), (1, 5))                         -0.041578
+    47  S-particle      ((0, 4), (1, 7))                         -0.030615
+    48  S-particle      ((0, 4), (2, 5))                         -0.014503
+    49  S-particle      ((0, 4), (2, 6))                         -0.018151
+    50  S-particle      ((0, 4), (3, 5))                         -0.030829
+    51  S-particle      ((0, 4), (3, 7))                         -0.044176
+    52  T2              ((0, 4), (2, 5))                         -0.014978
+    53  S-hole          ((0, 4), (2, 6))                         -0.018151
+    54  S-particle      ((0, 4), (1, 5))                         -0.041578
+    55  S-particle      ((0, 4), (1, 6))                         -0.014503
+    56  S-particle      ((0, 4), (1, 7))                         -0.030829
+    57  S-particle      ((0, 4), (2, 6))                         -0.018151
+    58  S-particle      ((0, 4), (3, 5))                         -0.030615
+    59  S-particle      ((0, 4), (3, 7))                         -0.044176
+    60  S-standard      ((0,), (1,))                              0.010000
+    61  S-standard      ((0,), (2,))                              0.010000
+    62  S-standard      ((0,), (3,))                              0.010000
+    63  S-standard      ((4,), (5,))                              0.010000
+    64  S-standard      ((4,), (6,))                              0.010000
+    65  S-standard      ((4,), (7,))                              0.010000
+===========================================================================
+
+[2026-11-06 20:35:27 IST | elapsed 1,510.3 s] [SS-COMPASS] Stage 8/8: building final ansatz and starting global SS-VQE optimization
+[2026-11-06 20:35:53 IST | elapsed 1,535.9 s] [SS-COMPASS] Optimizer evaluation 1 | weighted cost=-47.9623108540 Ha
+[2026-11-06 21:08:34 IST | elapsed 3,497.3 s] [SS-COMPASS] Optimizer evaluation 2 | weighted cost=-37.5838298000 Ha
+[2026-11-06 21:41:18 IST | elapsed 5,460.4 s] [SS-COMPASS] Optimizer evaluation 3 | weighted cost=-57.0310388855 Ha
+[2026-11-06 22:13:48 IST | elapsed 7,410.7 s] [SS-COMPASS] Optimizer evaluation 4 | weighted cost=-57.6719388857 Ha
+[2026-11-06 22:46:42 IST | elapsed 9,384.7 s] [SS-COMPASS] Optimizer evaluation 5 | weighted cost=-57.7220017629 Ha
+[2026-11-06 23:19:25 IST | elapsed 11,347.5 s] [SS-COMPASS] Optimizer evaluation 6 | weighted cost=-57.7236740878 Ha
+[2026-11-06 23:51:57 IST | elapsed 13,299.9 s] [SS-COMPASS] Optimizer evaluation 7 | weighted cost=-57.7257289374 Ha
+[2026-11-07 00:24:14 IST | elapsed 15,236.6 s] [SS-COMPASS] Optimizer evaluation 8 | weighted cost=-57.7293389890 Ha
+[2026-11-07 00:56:26 IST | elapsed 17,168.7 s] [SS-COMPASS] Optimizer evaluation 9 | weighted cost=-57.7316926804 Ha
+[2026-11-07 01:29:02 IST | elapsed 19,124.6 s] [SS-COMPASS] Optimizer evaluation 10 | weighted cost=-57.7319477712 Ha
+[2026-11-07 02:02:12 IST | elapsed 21,114.8 s] [SS-COMPASS] Optimizer evaluation 11 | weighted cost=-57.7323957902 Ha
+[2026-11-07 02:35:10 IST | elapsed 23,092.4 s] [SS-COMPASS] Optimizer evaluation 12 | weighted cost=-57.7324689429 Ha
+[2026-11-07 03:07:58 IST | elapsed 25,060.9 s] [SS-COMPASS] Optimizer evaluation 13 | weighted cost=-57.7325976178 Ha
+[2026-11-07 03:41:19 IST | elapsed 27,062.0 s] [SS-COMPASS] Optimizer evaluation 14 | weighted cost=-57.7324722466 Ha
+[2026-11-07 04:14:25 IST | elapsed 29,047.4 s] [SS-COMPASS] Optimizer evaluation 15 | weighted cost=-57.7326093705 Ha
+[2026-11-07 04:47:34 IST | elapsed 31,037.2 s] [SS-COMPASS] Optimizer evaluation 16 | weighted cost=-57.7326211078 Ha
+[2026-11-07 05:20:44 IST | elapsed 33,026.3 s] [SS-COMPASS] Optimizer evaluation 17 | weighted cost=-57.7326252498 Ha
+[2026-11-07 05:53:37 IST | elapsed 34,999.8 s] [SS-COMPASS] Optimizer evaluation 18 | weighted cost=-57.7326284450 Ha
+[2026-11-07 06:26:40 IST | elapsed 36,983.0 s] [SS-COMPASS] Optimizer evaluation 19 | weighted cost=-57.7326296596 Ha
+[2026-11-07 06:59:45 IST | elapsed 38,968.1 s] [SS-COMPASS] Optimizer evaluation 20 | weighted cost=-57.7326307430 Ha
+[2026-11-07 07:32:50 IST | elapsed 40,952.6 s] [SS-COMPASS] Optimizer evaluation 21 | weighted cost=-57.7326309249 Ha
+[2026-11-07 08:06:03 IST | elapsed 42,946.1 s] [SS-COMPASS] Optimizer evaluation 22 | weighted cost=-57.7326309391 Ha
+[2026-11-07 08:39:33 IST | elapsed 44,956.1 s] [SS-COMPASS] Optimizer evaluation 23 | weighted cost=-57.7326309822 Ha
+[2026-11-07 09:12:39 IST | elapsed 46,941.4 s] [SS-COMPASS] Optimizer evaluation 24 | weighted cost=-57.7326310130 Ha
+[2026-11-07 09:46:09 IST | elapsed 48,951.7 s] [SS-COMPASS] Optimizer evaluation 25 | weighted cost=-57.7326309975 Ha
+[2026-11-07 10:19:25 IST | elapsed 50,948.2 s] [SS-COMPASS] Optimizer evaluation 26 | weighted cost=-57.7326310230 Ha
+[2026-11-07 10:52:51 IST | elapsed 52,953.8 s] [SS-COMPASS] Optimizer evaluation 27 | weighted cost=-57.7326310367 Ha
+[2026-11-07 11:26:08 IST | elapsed 54,951.1 s] [SS-COMPASS] Optimizer evaluation 28 | weighted cost=-57.7326310381 Ha
+[2026-11-07 11:59:58 IST | elapsed 56,980.8 s] [SS-COMPASS] Optimizer evaluation 29 | weighted cost=-57.7326310388 Ha
+[2026-11-07 12:33:26 IST | elapsed 58,988.7 s] [SS-COMPASS] Optimizer evaluation 30 | weighted cost=-57.7326310395 Ha
+[2026-11-07 13:06:26 IST | elapsed 60,968.4 s] [SS-COMPASS] Optimizer evaluation 31 | weighted cost=-57.7326310386 Ha
+[2026-11-07 13:39:22 IST | elapsed 62,944.5 s] [SS-COMPASS] Optimizer evaluation 32 | weighted cost=-57.7326310397 Ha
+[2026-11-07 14:11:14 IST | elapsed 64,857.2 s] [SS-COMPASS] Optimizer evaluation 33 | weighted cost=-57.7326310399 Ha
+[2026-11-07 14:43:43 IST | elapsed 66,806.0 s] [SS-COMPASS] Optimizer evaluation 34 | weighted cost=-57.7326310400 Ha
+[2026-11-07 15:16:21 IST | elapsed 68,763.8 s] [SS-COMPASS] Optimizer evaluation 35 | weighted cost=-57.7326310400 Ha

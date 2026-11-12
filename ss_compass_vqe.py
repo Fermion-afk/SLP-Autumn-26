@@ -1,96 +1,110 @@
+#-------------------
+# Imports
+#-------------------
 from ss_vqe import SS_VQE
+
 import warnings
 warnings.filterwarnings("ignore")
-from datetime import datetime
-from time import perf_counter
 from typing import Any, cast
 
+#Math Related Functionalities 
+from math import comb
+import numpy as np
+from scipy.sparse import coo_matrix
+from scipy.sparse.linalg import eigsh
+from itertools import combinations
+
+# Parallel processing and Logging
+import os
 import multiprocessing as mp
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from itertools import combinations
-import os
+from datetime import datetime
+from time import perf_counter
 
-from pyscf import ci, mcscf, cc
-from pyscf.fci import cistring, direct_spin1
-from qiskit.circuit.library import StatePreparation
 
-import numpy as np
+# Qiskit and Qiskit_algorithms (circuits and primitives)
 from qiskit import transpile as qk_transpile
-from qiskit.primitives import StatevectorEstimator
-from qiskit_algorithms.optimizers import COBYLA, L_BFGS_B
 from qiskit.circuit import QuantumCircuit
 from qiskit.circuit.library import EvolvedOperatorAnsatz
+from qiskit.circuit.library import StatePreparation
+from qiskit.primitives import StatevectorEstimator
 from qiskit.quantum_info import Statevector
-from qiskit_algorithms import NumPyEigensolver
+from qiskit_algorithms.optimizers import L_BFGS_B
 
 # Qiskit Nature: electronic structure
 from qiskit_nature.second_q.drivers import PySCFDriver
-from qiskit_nature.second_q.operators import FermionicOp
 from qiskit_nature.second_q.problems import ElectronicStructureProblem
 from qiskit_nature.second_q.transformers import FreezeCoreTransformer
-
-# Second quantization and fermion-to-qubit mapping
 from qiskit_nature.second_q.mappers import JordanWignerMapper
-
-# Reference state and ansatz
 from qiskit_nature.second_q.circuit.library import HartreeFock, UCC
 
-# Ground-state solver interface
-from qiskit_nature.second_q.algorithms import ExcitedStatesEigensolver
-
-def _Sh_ex(num_spatial_orbitals=None, num_particles=None, **kwargs):
-    if num_spatial_orbitals is None:
-        num_spatial_orbitals = kwargs["num_spin_orbitals"]
-
+def _all_singles(num_spatial_orbitals, num_particles):
     n = num_spatial_orbitals
-    if num_particles is None:
-        raise ValueError("num_particles must be provided for _Sh_ex.")
-
     n_alpha, n_beta = num_particles
-
     occupied = list(range(n_alpha)) + list(range(n, n + n_beta))
     virtual = [i for i in range(2 * n) if i not in occupied]
+    return [((i,), (a,)) for i in occupied for a in virtual]
 
+def _all_doubles(num_spatial_orbitals, num_particles):
+    n = num_spatial_orbitals
+    n_alpha, n_beta = num_particles
+    occupied = list(range(n_alpha)) + list(range(n, n + n_beta))
+    virtual = [i for i in range(2 * n) if i not in occupied]
+    return [(occ, virt) for occ in combinations(occupied, 2)
+                       for virt in combinations(virtual, 2)]
+
+def _Sh_ex(num_spatial_orbitals, num_particles):
+    n = num_spatial_orbitals
+    n_alpha, n_beta = num_particles
+    occ_alpha = range(n_alpha)
+    occ_beta = range(n, n + n_beta)
+    vir_alpha = range(n_alpha, n)
+    vir_beta = range(n + n_beta, 2*n)
     excitations = []
-
-    for occ in combinations(occupied, 2):
-        for virt in combinations(virtual, 2):
-            if sum(i < n for i in occ) != sum(a < n for a in virt):
-                continue
-            if len(set(occ + virt)) == 4:
-                excitations.append((occ, virt))
-
+    # OP: (i_alpha, j_beta) -> (a_alpha, m_beta)
+    for i in occ_alpha:
+        for j in occ_beta:
+            for a in vir_alpha:
+                for m in occ_beta:
+                    if m != j:
+                        excitations.append(((i, j), (a, m)))
+    # OP: (j_alpha, i_beta) -> (m_alpha, a_beta)
+    for i in occ_beta:
+        for j in occ_alpha:
+            for a in vir_beta:
+                for m in occ_alpha:
+                    if m != j:
+                        excitations.append(((j, i), (m, a)))
     return excitations
 
-def _Sp_ex(num_spatial_orbitals=None, num_particles=None, **kwargs):
-    if num_spatial_orbitals is None:
-        num_spatial_orbitals = kwargs["num_spin_orbitals"]
-
+def _Sp_ex(num_spatial_orbitals, num_particles):
     n = num_spatial_orbitals
-    if num_particles is None:
-        raise ValueError("num_particles must be provided for _Sp_ex.")
-
     n_alpha, n_beta = num_particles
-
-    occupied = list(range(n_alpha)) + list(range(n, n + n_beta))
-    virtual = [i for i in range(2 * n) if i not in occupied]
-
+    occ_alpha = range(n_alpha)
+    occ_beta = range(n, n + n_beta)
+    vir_alpha = range(n_alpha, n)
+    vir_beta = range(n + n_beta, 2*n)
     excitations = []
-
-    for occ in combinations(occupied, 2):
-        for virt in combinations(virtual, 2):
-            if sum(i < n for i in occ) != sum(a < n for a in virt):
-                continue
-            if len(set(occ + virt)) == 4:
-                excitations.append((occ, virt))
-
+    # OP: (i_alpha, e_beta) -> (a_alpha, b_beta)
+    for i in occ_alpha:
+        for e in vir_beta:
+            for a in vir_alpha:
+                for b in vir_beta:
+                    if e != b:
+                        excitations.append(((i, e), (a, b)))
+    # OP: (i_beta, e_alpha) -> (a_beta, b_alpha)
+    for i in occ_beta:
+        for e in vir_alpha:
+            for a in vir_beta:
+                for b in vir_alpha:
+                    if e != b:
+                        excitations.append(((i, e), (a, b)))
     return excitations
 
 # ------------------
 # Helper functions
 # ------------------
-
 def _t2_screen_worker(args):
     idx, hamiltonian, transpiled_circuit, shift, weights, s_weights, initial_energies = args
 
@@ -139,66 +153,153 @@ def _build_pauli_ops(ucc_form, mapper):
 
 def _state_energies(estimator, ansatze, operator, point=None, shift=0.0):
     """Return individual state energies <psi_i|H|psi_i> + shift."""
-    energies = []
-    for ansatz in ansatze:
-        pub = (ansatz, operator) if point is None else (ansatz, operator, point)
-        energy = estimator.run([pub]).result()[0].data.evs
-        energies.append(float(np.real(energy)) + shift)
-    return np.asarray(energies, dtype=float)
+    pubs = [(ansatz, operator) if point is None else (ansatz, operator, point) for ansatz in ansatze]
+    results = estimator.run(pubs).result()
+    return np.asarray([float(np.real(r.data.evs)) + shift for r in results], dtype=float)
 
 #------------------------------------
 # Helper Functions for _init_states()
 #------------------------------------
-def _number_operator_encoding(qubit_mapper, n_so):
-    """Per spin orbital: n_i = c0 + c1 * Z_support under the given mapper (JW / Parity / BK)."""
-    rows, n_qubits = [], None
-    for i in range(n_so):
-        q = qubit_mapper.map(FermionicOp({f"+_{i} -_{i}": 1.0}, num_spin_orbitals=n_so)).simplify()
-        n_qubits = q.num_qubits
-        c0, c1, supp = 0.0, 0.0, []
-        for p, c in zip(q.paulis, q.coeffs):
-            if p.x.any():
-                raise ValueError("Number operator is not diagonal under the supplied mapper.")
-            if not p.z.any():
-                c0 += c.real
+
+def _init_single_det_states(fermionic_op, mf, ncore, n_active, k):
+    """Generate, rank and prepare the lowest-k single-determinant reference states."""
+    n_spin_orbitals = 2 * n_active
+    hf_det = _active_hf_determinant(mf, ncore, n_active)
+    determinants = _cis_determinants(hf_det, n_spin_orbitals)
+
+    # Diagonal elements of the projected Hamiltonian give the exact electronic energies
+    H_single = _projected_hamiltonian(fermionic_op, determinants)
+    diag_energies = np.real(H_single.diagonal())
+    ranked = sorted(zip(diag_energies, determinants), key=lambda x: x[0])
+
+    if not 1 <= k <= len(ranked):
+        raise ValueError(f"Requested {k} states, but only {len(ranked)} determinants exist.")
+
+    print("[SS-COMPASS] Ranked single determinants:")
+    circuits = []
+    for rank, (energy, det) in enumerate(ranked[:k], 1):
+        print(f"  {rank}: determinant={det:0{n_spin_orbitals}b} | E_elec={energy:.10f} Ha")
+        qc = QuantumCircuit(n_spin_orbitals, name=f"init_state_{rank-1}")
+        for p in range(n_spin_orbitals):
+            if (det >> p) & 1:
+                qc.x(p)
+        circuits.append(qc)
+
+    return circuits
+
+def _active_hf_determinant(mf, ncore, n_active):
+    occ = np.asarray(mf.mo_occ[ncore:ncore + n_active])
+    hf_occ = np.concatenate((occ >= 1, occ >= 2))
+    hf_det = sum(1 << p for p in np.flatnonzero(hf_occ))
+    return hf_det
+
+def _cis_determinants(hf_det, n_spin_orbitals):
+    occupied = [p for p in range(n_spin_orbitals) if (hf_det >> p) & 1]
+    virtual = [p for p in range(n_spin_orbitals) if not (hf_det >> p) & 1]
+    determinants = [hf_det]
+    determinants.extend(hf_det ^ (1 << p) ^ (1 << q)
+                    for p in occupied for q in virtual)
+    return determinants
+
+def _cisd_determinants(hf_det, n_spin_orbitals):
+    occupied = [p for p in range(n_spin_orbitals) if (hf_det >> p) & 1]
+    virtual = [p for p in range(n_spin_orbitals) if not (hf_det >> p) & 1]
+    determinants = _cis_determinants(hf_det, n_spin_orbitals)
+    determinants.extend(hf_det ^ sum(1 << p for p in occ) ^ sum(1 << p for p in virt)
+                    for occ in combinations(occupied, 2)
+                    for virt in combinations(virtual, 2))
+    return determinants
+
+def _projected_hamiltonian(fermionic_op, determinants):
+    basis = {det: i for i, det in enumerate(determinants)}
+    rows, cols, data = [], [], []
+
+    for label, coeff in fermionic_op.terms():
+        operators = [(token[0], int(token[2:])) for token in label.split()]
+        for col, det in enumerate(determinants):
+            target = det
+            sign = 1
+            for action, p in reversed(operators):
+                occupied = (target >> p) & 1
+                if (action == "+" and occupied) or (action == "-" and not occupied):
+                    break
+                sign *= (-1) ** ((target & ((1 << p) - 1)).bit_count())
+                target = target | (1 << p) if action == "+" else target ^ (1 << p)
             else:
-                c1 += c.real
-                supp = list(np.flatnonzero(p.z))
-        rows.append((supp, c0, c1))
-    return rows, n_qubits
+                row = basis.get(target)
+                if row is not None:
+                    rows.append(row)
+                    cols.append(col)
+                    data.append(coeff * sign)
+    dim = len(determinants)
+    H = coo_matrix((data, (rows, cols)), shape=(dim, dim), dtype=complex).tocsc()
+    diff = H - H.conj().T
+    if diff.nnz > 0 and np.max(np.abs(diff.data)) > 1e-10:
+        raise ValueError("Projected Hamiltonian is not Hermitian.")
+    return H
 
-def _solve_gf2(A, y):
-    m, n = A.shape
-    M = np.concatenate([A % 2, (y % 2)[:, None]], axis=1).astype(np.uint8)
-    pivots, r = [], 0
-    for c in range(n):
-        piv = next((i for i in range(r, m) if M[i, c]), None)
-        if piv is None:
-            continue
-        M[[r, piv]] = M[[piv, r]]
-        for i in range(m):
-            if i != r and M[i, c]:
-                M[i] ^= M[r]
-        pivots.append(c)
-        r += 1
-    if any(M[i, :n].sum() == 0 and M[i, n] for i in range(m)):
-        raise ValueError("Occupation is inconsistent with the mapper's particle sector.")
-    b = np.zeros(n, dtype=np.uint8)
-    for row, c in enumerate(pivots):
-        b[c] = M[row, n]
-    return b
+def _lowest_eigenvectors(H, k):
+    dim = H.shape[0]
+    if not 1 <= k <= dim:
+        raise ValueError(f"Requested {k} states, but the determinant space has dimension {dim}.")
 
-def _mapped_bitstring(occ, enc, n_qubits):
-    A, y = [], []
-    for (supp, c0, c1), n_i in zip(enc, occ):
-        if abs(c1) < 1e-12:
-            continue
-        row = np.zeros(n_qubits, dtype=np.uint8)
-        row[supp] = 1
-        A.append(row)
-        y.append(0 if (n_i - c0) / c1 > 0 else 1)
-    return _solve_gf2(np.array(A), np.array(y, dtype=np.uint8))
-  
+    if k >= dim - 1:
+        energies, vectors = np.linalg.eigh(H.toarray())
+        return energies[:k], vectors[:, :k]
+
+    energies, vectors = eigsh(H, k=k, which="SA")
+    order = np.argsort(energies)
+    return energies[order], vectors[:, order]
+
+def _determinants_to_circuits(determinants, coefficients, n_spin_orbitals):
+    circuits = []
+    for i in range(coefficients.shape[1]):
+        statevector = np.zeros(2**n_spin_orbitals, dtype=complex)
+        statevector[determinants] = coefficients[:, i]
+
+        norm = np.linalg.norm(statevector)
+        if norm < 1e-12:
+            raise ValueError("Initial state has zero norm.")
+
+        qc = QuantumCircuit(n_spin_orbitals, name=f"init_state_{i}")
+        qc.append(StatePreparation(Statevector(statevector / norm)), range(n_spin_orbitals))
+        circuits.append(qc)
+    return circuits
+
+def _init_cis_states(fermionic_op, mf, ncore, n_active, k):
+    """Generate the lowest-k eigenstates in the complete single-excitation space."""
+    if k < 1:
+        raise ValueError("At least one reference state is required.")
+
+    n_spin_orbitals = 2 * n_active
+    hf_det = _active_hf_determinant(mf, ncore, n_active)
+    determinants = _cis_determinants(hf_det, n_spin_orbitals)
+
+    H_cis = _projected_hamiltonian(fermionic_op, determinants)
+    energies, coefficients = _lowest_eigenvectors(H_cis, k)
+
+    print(f"[SS-COMPASS] CIS determinant space dimension: {len(determinants)}")
+    print(f"[SS-COMPASS] Lowest CIS energies: {energies}")
+
+    return _determinants_to_circuits(determinants, coefficients, n_spin_orbitals)
+
+def _init_cisd_states(fermionic_op, mf, ncore, n_active, k):
+    """Generate the lowest-k eigenstates in the complete single/double-excitation space."""
+    if k < 1:
+        raise ValueError("At least one reference state is required.")
+
+    n_spin_orbitals = 2 * n_active
+    hf_det = _active_hf_determinant(mf, ncore, n_active)
+    determinants = _cisd_determinants(hf_det, n_spin_orbitals)
+
+    H_cisd = _projected_hamiltonian(fermionic_op, determinants)
+    energies, coefficients = _lowest_eigenvectors(H_cisd, k)
+
+    print(f"[SS-COMPASS] CISD determinant space dimension: {len(determinants)}")
+    print(f"[SS-COMPASS] Lowest CISD energies: {energies}")
+
+    return _determinants_to_circuits(determinants, coefficients, n_spin_orbitals)
+
 # ----------------
 # Timestamped progress logging
 # ----------------
@@ -210,16 +311,16 @@ def _progress(message: str, start_time: float | None = None) -> None:
 # Main Callable
 # ----------------
 def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states: int, weights: list,
-                   method: str = "HartreeFock",  threshold: list = [1e-5,5e-6],active_space: list | None = None,
-                    s_weights: list | None = None) -> dict|None:
+                   charge: int = 0, spin: int = 0, init_states: list[QuantumCircuit] | None = None, method: str | None = "Single det", 
+                   threshold: list = [1e-5,5e-6], active_space: list | None = None, s_weights: list | None = None) -> dict|None:
 
     run_start = perf_counter()
-    _progress(f"Run started | geometry={d_eq} Å | basis={basis_set} | states={no_init_states}")
+    _progress(f"Run started | geometry={d_eq} Å | basis={basis_set} | charge={charge} | spin={spin} | states={no_init_states}")
 
     N_workers = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else (os.cpu_count() or 1)
     
     if s_weights is None:
-        sum_w = sum(w for w in weights)
+        sum_w = sum(weights)
         s_weights = [weight / sum_w for weight in weights[::-1]]
 
     if threshold is None or len(threshold) != 2:
@@ -242,13 +343,14 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
     # which causes silent hangs inside Aer's statevector simulator.)
     _ctx = mp.get_context('spawn')
     optimizer = L_BFGS_B(maxfun=200_000, maxiter=10_000)
+    estimator = StatevectorEstimator()
 
     # ------------------------------------------------------------------
     # 1. Molecular system setup
     # ------------------------------------------------------------------
     stage_start = perf_counter()
     _progress("Stage 1/8: running PySCF driver and applying frozen-core transformation", run_start)
-    driver = PySCFDriver(atom= coordinates,charge= 0,spin =0,basis = basis_set)
+    driver = PySCFDriver(atom=coordinates, charge=charge, spin=spin, basis=basis_set)
     es_problem = cast(ElectronicStructureProblem, driver.run())
     es_problem = cast(ElectronicStructureProblem,
         FreezeCoreTransformer(freeze_core=True).transform(es_problem))
@@ -258,12 +360,10 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
     qubit_op = mapper.map(fermionic_op)
     num_particles = es_problem.num_particles
     num_spin_orbitals = 2*cast(Any,es_problem.num_spatial_orbitals)
-    if num_particles is not None:
-        num_pa = num_particles
-    else:
+    if num_particles is None:
         raise ValueError("The number of particles can't be zero")
-        num_pa = 0
-    ncore = mf.mol.nelectron // 2 - num_pa[0]
+    # Generalize core spatial orbital calculation for both RHF and ROHF
+    ncore = (mf.mol.nelectron - sum(num_particles)) // 2
 
     # Energy contributions omitted from the mapped active-space Hamiltonian.
     energy_constants = es_problem.hamiltonian.constants
@@ -284,81 +384,21 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
         active_space_set = set(active_space)
     _progress(f"Molecular Hamiltonian ready | spatial orbitals={num_spatial_orbitals} | particles={num_particles} | setup took {perf_counter()-stage_start:.1f} s", run_start)
 
-    def _init_states(method, no_init_states, num_spatial_orbitals, num_particles, qubit_mapper):
+    def _init_states(method, no_init_states, num_spatial_orbitals, num_particles):
+        method = str(method).lower()
+        if method in ("single det", "singledet"):
+            return _init_single_det_states(fermionic_op, mf, ncore, num_spatial_orbitals, no_init_states)
+        elif method == "cis":
+            return _init_cis_states(fermionic_op, mf, ncore, num_spatial_orbitals, no_init_states)
+        elif method == "cisd":
+            return _init_cisd_states(fermionic_op, mf, ncore, num_spatial_orbitals, no_init_states)
+        else:
+            raise ValueError(f"Unknown initialization method: {method}")
 
-        n, (na, nb), k = num_spatial_orbitals, num_particles, no_init_states
-        enc, nq = _number_operator_encoding(qubit_mapper, 2*n)
-        sa = cistring.make_strings(range(n), na)
-        sb = cistring.make_strings(range(n), nb)
-        if k > len(sa) * len(sb):
-            raise ValueError(f"Requested {k} states, but only {len(sa) * len(sb)} determinants exist.")
-
-        m = str(method).lower()
-        if m == "fci":                                   # exact lowest k roots in the active space
-            mc = mcscf.CASCI(mf, n, (na, nb))
-            mc_solver = cast(Any, mc)
-            mc_solver.fcisolver = direct_spin1.FCI()
-            mc_solver.fcisolver.nroots = k
-            mc_solver.kernel()
-            vecs = list(mc_solver.ci) if k > 1 else [mc_solver.ci]
-        elif m == "cisd":                                # CISD roots, mapped to the FCI space
-            c = ci.CISD(mf, frozen=ncore)
-            c.nroots = k
-            c.kernel()
-            cs = c.ci if k > 1 else [c.ci]
-            vecs = [ci.cisd.to_fcivec(v, mf.mo_coeff.shape[1], mf.mol.nelec, frozen=ncore) for v in cast(Any,cs)]
-
-        elif m == "ccsd":                                # CCSD ground state (+ CISD roots for the rest)
-            g = cc.CCSD(mf, frozen=ncore)
-            g.kernel()
-            t1, t2 = g.t1, g.t2
-            c2 = t2 + np.einsum("ia,jb->ijab", cast(Any, t1), cast(Any, t1))   # exp(T)|HF> truncated at doubles
-            v0 = ci.cisd.to_fcivec(ci.cisd.amplitudes_to_cisdvec(1.0, t1, c2),
-                                   mf.mo_coeff.shape[1], mf.mol.nelec, frozen=ncore)
-            vecs = [v0]
-            if k > 1:                                    # CCSD has no excited roots here, so borrow CISD's
-                c = ci.CISD(mf, frozen=ncore)
-                c.nroots = k
-                c.kernel()
-                vecs += [ci.cisd.to_fcivec(v, mf.mo_coeff.shape[1], mf.mol.nelec, frozen=ncore) for v in cast(Any,c.ci)[1:]]
-        
-        else:                                            # default: HF, then determinants by excitation rank                                            # HF: lowest-k determinants by orbital-energy sum
-            eps = mf.mo_energy[ncore:ncore + n]
-            e_a = [sum(eps[p] for p in range(n) if (int(s) >> p) & 1) for s in sa]
-            e_b = [sum(eps[p] for p in range(n) if (int(s) >> p) & 1) for s in sb]
-            ranked = sorted((x + y, i, j) for i, x in enumerate(e_a) for j, y in enumerate(e_b))[:k]
-            vecs = []
-            for _, i, j in ranked:
-                v = np.zeros((len(sa), len(sb)))
-                v[i, j] = 1.0
-                vecs.append(v)
-
-        states = []
-        for v in vecs:
-            v = np.asarray(v).reshape(len(sa), len(sb))
-            amp = np.zeros(2**cast(Any,nq), dtype=complex)
-            for (i, j), a in np.ndenumerate(v):          # CI amplitude -> qubit basis state
-                if abs(a) < 1e-10:
-                    continue
-                occ = [(int(sa[i]) >> p) & 1 for p in range(n)] + [(int(sb[j]) >> p) & 1 for p in range(n)]
-                bits = _mapped_bitstring(occ, enc, nq)
-                amp[sum(int(b) << q for q, b in enumerate(bits))] += a
-            states.append(amp)
-
-        Q, R = np.linalg.qr(np.array(states).T)          # enforce exact orthonormality
-        Q = Q * np.sign(np.diag(R))
-        circuits = []
-        for i in range(k):
-            qc = QuantumCircuit(nq, name=f"init_state_{i}")
-            qc.append(StatePreparation(Statevector(Q[:, i])), range(cast(Any, nq)))
-            circuits.append(qc)
-        return circuits
-
-    stage_start = perf_counter()
-    _progress("Stage 2/8: constructing reference states", run_start)
-    init_states = _init_states(method, no_init_states,num_spatial_orbitals,num_pa, mapper)
-        # Initial reference-state energies E_i^(0)
-    initial_energies = _state_energies(StatevectorEstimator(), init_states, qubit_op, shift=shift)
+    if init_states is None:
+        init_states = _init_states(method, no_init_states, num_spatial_orbitals, num_particles)
+    # Initial reference-state energies E_i^(0)
+    initial_energies = _state_energies(estimator, init_states, qubit_op, shift=shift)
     print("[SS-COMPASS] Initial reference-state energies:")
     print(initial_energies, flush=True)
     _progress(f"Reference states ready | took {perf_counter()-stage_start:.1f} s", run_start)
@@ -367,54 +407,70 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
     _ = init_states[0].num_qubits
     print(f"Number of qubits:{init_states[0].num_qubits}")
     # ------------------------------------------------------------------
-    # 2. Hartree-Fock energy
+    # 2. Hartree-Fock Reference state for constructing Operator pools
     # ------------------------------------------------------------------
-    num_spatial_orbitals = es_problem.num_spatial_orbitals
-    init_state = HartreeFock(num_spatial_orbitals,num_particles,mapper)
-    # ------------------------------------------------------------------
-    # 3. Exact (NumPy / FCI) energy spectrum
+    # num_spatial_orbitals is already the correct int from Stage 1; pass it directly.
+    init_state = HartreeFock(num_spatial_orbitals, num_particles, mapper)    # ------------------------------------------------------------------
+    # 3. Exact spectrum in the complete fixed-N Hilbert space
     # ------------------------------------------------------------------
     stage_start = perf_counter()
-    _progress("Stage 3/8: computing exact active-space eigenvalues", run_start)
+    _progress("Stage 3/8: computing exact fixed-N eigenvalues", run_start)
 
-    numpy_solver = NumPyEigensolver(
-        k=no_init_states,
-        filter_criterion=cast(Any, es_problem.get_default_filter_criterion())
-    )
-    calc = ExcitedStatesEigensolver(mapper, numpy_solver)
-    exact_result = calc.solve(es_problem)
+    n_electrons = sum(num_particles)
+    n_determinants = int(comb(num_spin_orbitals, n_electrons))
 
-    if exact_result.eigenvalues is not None:
-        exact_electronic_energies = np.real(exact_result.eigenvalues)
-        exact_energies = exact_electronic_energies + shift
+    if not 1 <= no_init_states <= n_determinants:
+        raise ValueError(f"Requested {no_init_states} states, but the fixed-N space has dimension {n_determinants}.")
+
+    # Construct Hamiltonian directly in the fixed-N determinant basis
+    determinants = [sum(1 << p for p in occ)
+                    for occ in combinations(range(num_spin_orbitals), n_electrons)]
+    H_N = _projected_hamiltonian(fermionic_op, determinants)
+
+    # Diagonalize the complete fixed-N Hamiltonian
+    if no_init_states >= n_determinants - 1:
+        if hasattr(H_N, "toarray"):
+            H_N_dense: np.ndarray = np.asarray(H_N.toarray())
+        else:
+            H_N_dense = np.asarray(H_N)
+        exact_electronic_energies = np.linalg.eigvalsh(H_N_dense)[:no_init_states]
     else:
-        raise RuntimeError("The FCI calculation didn't return any eigenvalues.")
+        exact_electronic_energies = eigsh(H_N, k=no_init_states, which="SA", return_eigenvectors=False)
+        exact_electronic_energies = np.sort(np.asarray(exact_electronic_energies))
+    exact_energies = np.real(exact_electronic_energies) + shift
 
-    print(f"First {len(exact_energies)} FCI total energies:")
+    print(f"[SS-COMPASS] Total electrons: {n_electrons}")
+    print(f"[SS-COMPASS] Spin orbitals: {num_spin_orbitals}")
+    print(f"[SS-COMPASS] Fixed-N determinant space dimension: {n_determinants}")
+    print(f"First {len(exact_energies)} exact fixed-N total energies:")
     print(exact_energies, flush=True)
 
-    _progress(f"Exact spectrum ready | took {perf_counter()-stage_start:.1f} s", run_start)
+    _progress(f"Exact fixed-N spectrum ready | took {perf_counter()-stage_start:.1f} s", run_start)
     # ------------------------------------------------------------------
     # 4. Build operator pools
     # ------------------------------------------------------------------
     stage_start = perf_counter()
     _progress("Stage 4/8: constructing S/T2 operator pools", run_start)
+
+    # Single excitations
     ucc_s = UCC(num_particles=num_particles,
-        num_spatial_orbitals=es_problem.num_spatial_orbitals,
-        excitations="s",initial_state=init_state,qubit_mapper=mapper)
+        num_spatial_orbitals=num_spatial_orbitals,
+        excitations=_all_singles, initial_state=init_state, qubit_mapper=mapper)
     s_excitations = ucc_s.excitation_list
     if s_excitations is None:
         raise ValueError("The UCC single-excitation pool is empty")
     s_paulis = _build_pauli_ops(ucc_s, mapper)
 
+    # Double excitations
     ucc_d = UCC(num_particles=num_particles,
-        num_spatial_orbitals=es_problem.num_spatial_orbitals,
-        excitations="d",initial_state=init_state,qubit_mapper=mapper)
+        num_spatial_orbitals=num_spatial_orbitals,
+        excitations=_all_doubles, initial_state=init_state, qubit_mapper=mapper)
     t2_excitations = ucc_d.excitation_list
     if t2_excitations is None:
         raise ValueError("The UCC double-excitation pool is empty")
     t2_paulis = _build_pauli_ops(ucc_d, mapper)
 
+    # Scatters (Hole)
     ucc_sh = UCC(num_particles=num_particles, num_spatial_orbitals=num_spatial_orbitals,
             excitations=_Sh_ex, initial_state=init_state, qubit_mapper=mapper)
     sh_excitations = ucc_sh._get_excitation_list()
@@ -422,6 +478,7 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
         raise ValueError("The UCC hole-excitation pool is empty")
     sh_paulis = _build_pauli_ops(ucc_sh,mapper)
 
+    # Scatters (Particle)
     ucc_sp = UCC(num_particles=num_particles, num_spatial_orbitals=num_spatial_orbitals,
             excitations=_Sp_ex, initial_state=init_state, qubit_mapper=mapper)
     sp_excitations = ucc_sp._get_excitation_list()
@@ -447,10 +504,11 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
 
     stage_start = perf_counter()
     t2_raw = []
-    n_workers = min(N_workers, len(t2_args))
+    n_workers = min(N_workers, len(t2_args)) # Checks for no of parallel processors(workers) available 
 
     _progress(f"T2 screening started | workers={n_workers}", run_start)
 
+    # Runs T2 screening parallely across several T2 operators
     with ProcessPoolExecutor(max_workers=n_workers, mp_context=_ctx) as executor:
         futures = [executor.submit(_t2_screen_worker, args) for args in t2_args]
 
@@ -460,7 +518,7 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
             if i == 1 or i % max(1, n_t2 // 20) == 0 or i == n_t2:
                 _progress(f"T2 screening: {i}/{n_t2} ({100*i/n_t2:.1f}%)", run_start)
 
-    t2_screen = sorted([(score, idx, theta, energies)
+    t2_screen = sorted([(score, idx, theta, energies) #Sorts and screens the operator based on the their Post optimization energy difference 
             for idx, score, theta, energies in t2_raw
             if abs(score) > threshold_array[0]],
             key=lambda item: abs(item[0]),
@@ -478,27 +536,35 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
     # s_candidates: list of (cand_idx, rank, t2_idx, s_type, s_idx, theta_t2, E_t2)
     s_candidates = []
 
-    for rank, (t2_score, t2_idx, theta_t2, t2_energies) in enumerate(t2_screen):
-        if t2_excitations is not None:
-            t2_ex = t2_excitations[t2_idx]
-            t2_flat = [t2_ex[0][0], t2_ex[1][0], t2_ex[0][1], t2_ex[1][1]]
-            active_in_t2 = active_space_set.intersection(t2_flat)
-            if not active_in_t2:
-                continue
-        else:
-            raise ValueError("the pool of t2 excitations are empty")
+    # Occupied spin-orbitals set for robust contractible orbital identification
+    n_alpha, n_beta = num_particles
+    occupied_spin_orbitals = set(range(n_alpha)) | set(range(num_spatial_orbitals, num_spatial_orbitals + n_beta))
 
-        sh_seen = set()
-        sp_seen = set()
-        for act_orb in active_in_t2:
-            for j, sh_ex in enumerate(sh_excitations):
-                if j not in sh_seen and act_orb in sh_ex[1]:
-                    s_candidates.append((len(s_candidates), rank, t2_idx, 'h', j, theta_t2, t2_energies))
-                    sh_seen.add(j)
-            for j, sp_ex in enumerate(sp_excitations):
-                if j not in sp_seen and act_orb in sp_ex[0]:
-                    s_candidates.append((len(s_candidates), rank, t2_idx, 'p', j, theta_t2, t2_energies))
-                    sp_seen.add(j)
+    for rank, (t2_score, t2_idx, theta_t2, t2_energies) in enumerate(t2_screen):
+        t2_ex = t2_excitations[t2_idx]
+        # Spatial orbitals involved in the T2 excitation
+        t2_holes = {p % num_spatial_orbitals for p in t2_ex[0]}
+        t2_particles = {p % num_spatial_orbitals for p in t2_ex[1]}
+
+        # Active-space contractible orbitals
+        active_holes = active_space_set.intersection(t2_holes)
+        active_particles = active_space_set.intersection(t2_particles)
+
+        sh_seen, sp_seen = set(), set()
+        # S_h: match its contractible hole orbital (the occupied orbital in sh_ex[1]) with an active T2 hole
+        for j, sh_ex in enumerate(sh_excitations):
+            m_spin = next(p for p in sh_ex[1] if p in occupied_spin_orbitals)
+            m = m_spin % num_spatial_orbitals
+            if m in active_holes and j not in sh_seen:
+                s_candidates.append((len(s_candidates), rank, t2_idx, 'h', j, theta_t2, t2_energies))
+                sh_seen.add(j)
+        # S_p: match its contractible particle orbital (the virtual orbital in sp_ex[0]) with an active T2 particle
+        for j, sp_ex in enumerate(sp_excitations):
+            e_spin = next(p for p in sp_ex[0] if p not in occupied_spin_orbitals)
+            e = e_spin % num_spatial_orbitals
+            if e in active_particles and j not in sp_seen:
+                s_candidates.append((len(s_candidates), rank, t2_idx, 'p', j, theta_t2, t2_energies))
+                sp_seen.add(j)
     # ------------------------------------------------------------------
     # 7. Build and screen S-hole / S-particle candidates
     #    Global dynamic scheduling across all T2 operators:
@@ -509,13 +575,12 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
 
         print(f"[SS-COMPASS] Pre-compiling {n_s} S circuits for {n_states} reference states ...")
 
-        selected_s_paulis = [sh_paulis[s_idx] if s_type == "h" else sp_paulis[s_idx]
-                             for _, rank, t2_idx, s_type, s_idx, theta_t2, t2_energies in s_candidates]
-
-        s_ansatze = [[EvolvedOperatorAnsatz(operators=[t2_paulis[t2_idx], s_pauli], initial_state=ref)
+        s_ansatze = [[EvolvedOperatorAnsatz(
+                          operators=[t2_paulis[t2_idx],
+                                     sh_paulis[s_idx] if s_type == "h" else sp_paulis[s_idx]],
+                          initial_state=ref)
                       for ref in init_states]
-                     for (_, rank, t2_idx, s_type, s_idx, theta_t2, t2_energies), s_pauli
-                     in zip(s_candidates, selected_s_paulis)]
+                     for (_, rank, t2_idx, s_type, s_idx, theta_t2, t2_energies) in s_candidates]
 
         s_transpiled_list = [qk_transpile(cast(list[QuantumCircuit], ansatze), optimization_level=1)
                              for ansatze in s_ansatze]
@@ -602,24 +667,22 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
     def _opt_callback(eval_count, params, cost, metadata):
         _progress(f"Optimizer evaluation {eval_count} | weighted cost={float(np.real(cost)):.10f} Ha", run_start)
 
-    final_ss = SS_VQE(StatevectorEstimator(), final_transpiled, weights_array, optimizer,
+    final_ss = SS_VQE(estimator, final_transpiled, weights_array, optimizer,
                       initial_point=ini_pt, callback=_opt_callback)
     final_result = final_ss.compute_minimum_eigenvalue(cast(Any,qubit_op))
     _progress(f"Global optimization finished | evaluations={final_result.cost_function_evals} | stage took {perf_counter()-stage_start:.1f} s", run_start)
     # per-reference-state energies at the optimum (weighted cost alone hides these)
-    state_energies = _state_energies(StatevectorEstimator(), final_result.optimal_circuits, qubit_op, shift=shift)
+    state_energies = _state_energies(estimator, final_result.optimal_circuits, qubit_op, shift=shift)
     print(f"geom- {d_eq}  parameters- {len(final_opt_t)}")
     for i, (e, ex) in enumerate(zip(state_energies, exact_energies)):
         print(f"  state {i}: SS-COMPASS {e:.8f}   FCI {ex:.8f}   err {e - ex:.2e} Ha")
 
     _progress(f"Run complete | total elapsed {perf_counter()-run_start:.1f} s", run_start)
-    return {
-        'geometry': d_eq,
-        'energies': state_energies,
-        'n_params': len(final_opt_t),
-        'exact_energies': exact_energies,
-        'initial_energies': initial_energies,
-        'ansatz': final_ansatze,
-        'optimal_params': final_result.optimal_point,
-        'op_info': final_op_info,
-    }
+    return {'geometry': d_eq,
+            'energies': state_energies,
+            'n_params': len(final_opt_t),
+            'exact_energies': exact_energies,
+            'initial_energies': initial_energies,
+            'ansatz': final_ansatze,
+            'optimal_params': final_result.optimal_point,
+            'op_info': final_op_info}

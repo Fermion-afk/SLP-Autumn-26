@@ -1,0 +1,38 @@
+[2026-11-06 16:16:07 IST | elapsed 0.0 s] Run started | LiH | bond length=1.595000 Å | basis=sto-3g
+[2026-11-06 16:16:08 IST | elapsed 1.0 s] Hamiltonian ready | orbitals=5 | particles=(1, 1) | qubits=10 | shift=-6.802973550012 Ha
+[2026-11-06 16:16:08 IST | elapsed 1.0 s] Prepared 4 determinant reference states
+[2026-11-06 16:16:08 IST | elapsed 1.1 s] UCCSD pool ready | singles=8 | doubles=16 | parameters=24
+[2026-11-06 16:16:09 IST | elapsed 1.4 s] Starting SS-VQE optimization
+[2026-11-06 16:16:35 IST | elapsed 28.3 s] Evaluation     1 | weighted cost = -16.000772063917 Ha
+[2026-11-06 16:24:43 IST | elapsed 515.6 s] Evaluation     2 | weighted cost = -12.169570467787 Ha
+[2026-11-06 16:33:23 IST | elapsed 1,036.1 s] Evaluation     3 | weighted cost = -16.276950674634 Ha
+[2026-11-06 16:42:03 IST | elapsed 1,556.1 s] Evaluation     4 | weighted cost = -16.292491937815 Ha
+[2026-11-06 16:50:53 IST | elapsed 2,085.9 s] Evaluation     5 | weighted cost = -16.295037227726 Ha
+[2026-11-06 16:59:50 IST | elapsed 2,622.4 s] Evaluation     6 | weighted cost = -16.295467560955 Ha
+[2026-11-06 17:08:42 IST | elapsed 3,154.5 s] Evaluation     7 | weighted cost = -16.295575258695 Ha
+[2026-11-06 17:17:31 IST | elapsed 3,684.1 s] Evaluation     8 | weighted cost = -16.295647978722 Ha
+[2026-11-06 17:26:01 IST | elapsed 4,193.5 s] Evaluation     9 | weighted cost = -16.295681153177 Ha
+[2026-11-06 17:34:34 IST | elapsed 4,706.6 s] Evaluation    10 | weighted cost = -16.295699167251 Ha
+[2026-11-06 17:43:02 IST | elapsed 5,214.7 s] Evaluation    11 | weighted cost = -16.295704602263 Ha
+[2026-11-06 17:51:35 IST | elapsed 5,727.5 s] Evaluation    12 | weighted cost = -16.295704605457 Ha
+[2026-11-06 18:00:07 IST | elapsed 6,240.2 s] Evaluation    13 | weighted cost = -16.295704605582 Ha
+[2026-11-06 18:08:39 IST | elapsed 6,751.4 s] Optimization complete
+[2026-11-06 18:08:39 IST | elapsed 6,751.4 s] Evaluations=13 | optimizer time=6722.90 s
+[2026-11-06 18:08:39 IST | elapsed 6,751.4 s] Weighted objective (with shift) = -125.143281405772 Ha
+
+=================================================================
+                 UCCSD-SS-VQE RESULTS
+=================================================================
+   State            Energy (Ha)               Gap (Ha)
+       0        -7.875892007025         0.000000000000
+       1        -7.737548373701         0.138343633323
+       2        -7.703994298144         0.171897708880
+       3        -7.689244635891         0.186647371134
+=================================================================
+Optimal parameters: [ 7.51247191e-02 -1.01817258e-15 -1.41681026e-15 -1.01224388e-01
+ -2.07352572e-02  2.56695652e-16  2.02581690e-15  1.19852541e-02
+ -2.05142277e-02 -7.14583903e-16 -4.48113401e-16  4.09457201e-02
+ -5.93473122e-16 -2.24767150e-02  1.08450678e-16  1.11110400e-15
+ -4.16415450e-16  1.25453367e-15 -2.24823979e-02 -1.48297894e-16
+  5.18338869e-02  2.50184748e-16 -1.62240523e-15 -1.18208766e-01]
+[2026-11-06 18:08:39 IST | elapsed 6,751.4 s] Run finished
