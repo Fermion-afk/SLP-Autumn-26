@@ -14,11 +14,12 @@ from typing import Any, cast, Sequence
 import numpy as np
 from qiskit_algorithms import VQEResult
 from qiskit.circuit import QuantumCircuit
-from qiskit.primitives import BaseEstimatorV2
+from qiskit.primitives import BaseEstimatorV2, StatevectorEstimator
 from qiskit.quantum_info import SparsePauliOp
 from qiskit.quantum_info.operators.base_operator import BaseOperator
 
-from qiskit_algorithms.gradients import BaseEstimatorGradient,ParamShiftEstimatorGradient
+from qiskit_algorithms.gradients import (BaseEstimatorGradient,ReverseEstimatorGradient,
+    ParamShiftEstimatorGradient)
 from qiskit_algorithms.custom_types import Transpiler
 from qiskit_algorithms.exceptions import AlgorithmError
 from qiskit_algorithms.list_or_dict import ListOrDict
@@ -297,20 +298,24 @@ class SS_VQE(VariationalAlgorithm, MinimumEigensolver):
         weights: np.ndarray,
     ) -> Callable[[np.ndarray], np.ndarray]:
 
-        def _evaluate_one(gradient, ansatz, operator, parameters):
-            job = gradient.run([ansatz], [operator], [parameters.tolist()])
+        if self.gradient is not None:
+            gradient = self.gradient
+        elif isinstance(self.estimator, StatevectorEstimator):
+            gradient = ReverseEstimatorGradient()
+        else:
+            gradient = ParamShiftEstimatorGradient(self.estimator)
+
+        def _evaluate_one(grad_eval, ansatz, operator, parameters):
+            job = grad_eval.run([ansatz], [operator], [parameters.tolist()])
             return job.result().gradients[0]
 
         def evaluate_gradient(parameters: np.ndarray) -> np.ndarray:
             try:
-                gradient = self.gradient
-                if gradient is None:
-                    gradient = ParamShiftEstimatorGradient(self.estimator)
-
                 with ThreadPoolExecutor(max_workers=len(ansatze)) as executor:
-                    futures = [executor.submit(_evaluate_one, gradient, ansatz, operator, parameters)
-                                for ansatz in ansatze]
-    
+                    futures = [
+                        executor.submit(_evaluate_one, gradient, ansatz, operator, parameters)
+                        for ansatz in ansatze
+                    ]
                     gradients = [future.result() for future in futures]
 
             except Exception as exc:
@@ -319,8 +324,7 @@ class SS_VQE(VariationalAlgorithm, MinimumEigensolver):
                 ) from exc
 
             gradients = np.asarray(gradients)
-            cost_gradient = np.sum(np.asarray(weights)[:, None] * gradients,
-                            axis=0)
+            cost_gradient = np.sum(np.asarray(weights)[:, None] * gradients, axis=0)
 
             return cost_gradient
 
