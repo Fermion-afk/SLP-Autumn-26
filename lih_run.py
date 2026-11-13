@@ -113,7 +113,7 @@ def main():
 
                 result = ss_compass_vqe(coordinates=coordinates, d_eq=bond_length, basis_set=basis,
                     no_init_states=n_states, weights=weights, charge=charge, spin=spin,
-                    method="Single det", threshold=thresholds)
+                    method="cisd", threshold=thresholds)
 
                 write_screening_excel(result, excel_file, run_info)
                 print(f"\nExcel screening report saved: {excel_file}")
