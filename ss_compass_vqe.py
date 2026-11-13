@@ -109,7 +109,7 @@ def _t2_screen_worker(args):
     idx, hamiltonian, transpiled_circuit, shift, weights, s_weights, initial_energies = args
     estimator = StatevectorEstimator()
     optimizer = L_BFGS_B(maxfun=200_000, maxiter=10_000)
-    ss_vqe = SS_VQE(estimator, transpiled_circuit, weights, optimizer, initial_point=np.array([0.0]))
+    ss_vqe = SS_VQE(cast(Any, estimator), transpiled_circuit, weights, optimizer, initial_point=np.array([0.0]))
     result = ss_vqe.compute_minimum_eigenvalue(hamiltonian)
     optimal_point = np.asarray(result.optimal_point).reshape(-1)
     theta_t2 = float(optimal_point[0])
@@ -123,7 +123,7 @@ def _s_screen_worker(args):
     idx, hamiltonian, transpiled_circuit, shift, weights, s_weights, baseline_energies, theta_t2 = args
     estimator = StatevectorEstimator()
     optimizer = L_BFGS_B(maxfun=200_000, maxiter=10_000)
-    ss_vqe = SS_VQE(estimator, transpiled_circuit, weights, optimizer, initial_point=np.array([theta_t2, 0.01]))
+    ss_vqe = SS_VQE(cast(Any, estimator), transpiled_circuit, weights, optimizer, initial_point=np.array([theta_t2, 0.01]))
     result = ss_vqe.compute_minimum_eigenvalue(hamiltonian)
     optimal_point = np.asarray(result.optimal_point).reshape(-1)
     theta_t2_final = float(optimal_point[0])
@@ -157,32 +157,6 @@ def _state_energies(estimator, ansatze, operator, point=None, shift=0.0):
 #------------------------------------
 # Helper Functions for _init_states()
 #------------------------------------
-
-def _init_single_det_states(fermionic_op, mf, ncore, n_active, k):
-    """Generate, rank and prepare the lowest-k single-determinant reference states."""
-    n_spin_orbitals = 2 * n_active
-    hf_det = _active_hf_determinant(mf, ncore, n_active)
-    determinants = _cis_determinants(hf_det, n_spin_orbitals)
-
-    # Diagonal elements of the projected Hamiltonian give the exact electronic energies
-    H_single = _projected_hamiltonian(fermionic_op, determinants)
-    diag_energies = np.real(H_single.diagonal())
-    ranked = sorted(zip(diag_energies, determinants), key=lambda x: x[0])
-
-    if not 1 <= k <= len(ranked):
-        raise ValueError(f"Requested {k} states, but only {len(ranked)} determinants exist.")
-
-    print("[SS-COMPASS] Ranked single determinants:")
-    circuits = []
-    for rank, (energy, det) in enumerate(ranked[:k], 1):
-        print(f"  {rank}: determinant={det:0{n_spin_orbitals}b} | E_elec={energy:.10f} Ha")
-        qc = QuantumCircuit(n_spin_orbitals, name=f"init_state_{rank-1}")
-        for p in range(n_spin_orbitals):
-            if (det >> p) & 1:
-                qc.x(p)
-        circuits.append(qc)
-
-    return circuits
 
 def _active_hf_determinant(mf, ncore, n_active):
     occ = np.asarray(mf.mo_occ[ncore:ncore + n_active])
@@ -295,6 +269,105 @@ def _init_cisd_states(fermionic_op, mf, ncore, n_active, k):
 
     return _determinants_to_circuits(determinants, coefficients, n_spin_orbitals)
 
+def _unperturbed_det_energies(determinants, H_proj, mf, ncore, n_active, h0_type="mp"):
+    """Compute E_D^(0) for each determinant under Møller–Plesset ('mp') or Epstein–Nesbet ('en')."""
+    if h0_type == "en":
+        return np.real(H_proj.diagonal())
+
+    mo_e = mf.mo_energy
+    if isinstance(mo_e, tuple) or (isinstance(mo_e, np.ndarray) and mo_e.ndim == 2):
+        eps_alpha = np.asarray(mo_e[0][ncore:ncore + n_active], dtype=float)
+        eps_beta = np.asarray(mo_e[1][ncore:ncore + n_active], dtype=float)
+    else:
+        eps_alpha = np.asarray(mo_e[ncore:ncore + n_active], dtype=float)
+        eps_beta = eps_alpha
+    spin_eps = np.concatenate((eps_alpha, eps_beta))
+
+    energies = np.zeros(len(determinants), dtype=float)
+    for idx, det in enumerate(determinants):
+        e0 = 0.0
+        bits = det
+        while bits:
+            lsb = bits & -bits
+            p = lsb.bit_length() - 1
+            e0 += spin_eps[p]
+            bits ^= lsb
+        energies[idx] = e0
+    return energies
+
+def _init_dpt1_states(fermionic_op, mf, ncore, n_active, k, deg_tol=1e-5, h0_type="mp"):
+    """Generate the lowest-k first-order degenerate perturbation theory (DPT1) states."""
+    if k < 1:
+        raise ValueError("At least one reference state is required.")
+
+    n_spin_orbitals = 2 * n_active
+    hf_det = _active_hf_determinant(mf, ncore, n_active)
+
+    # Seed candidate pool from CISD around HF so all low-lying determinants are present
+    seed_dets = _cisd_determinants(hf_det, n_spin_orbitals)
+    if len(seed_dets) < k:
+        raise ValueError(f"Requested {k} states, but only {len(seed_dets)} seed determinants exist.")
+
+    H_seed = _projected_hamiltonian(fermionic_op, seed_dets) if h0_type == "en" else None
+    e0_seed = _unperturbed_det_energies(seed_dets, H_seed, mf, ncore, n_active, h0_type=h0_type)
+
+    order = np.argsort(e0_seed)
+    sorted_dets = [seed_dets[i] for i in order]
+    sorted_e0 = e0_seed[order]
+
+    # Expand model space P to include all states degenerate/quasi-degenerate with the k-th state
+    cutoff_e0 = sorted_e0[k - 1] + deg_tol
+    p_size = int(np.searchsorted(sorted_e0, cutoff_e0, side="right"))
+    p_dets = sorted_dets[:p_size]
+    p_set = set(p_dets)
+
+    # Orthogonal space Q: all singles & doubles out of every P-space determinant
+    q_set = set()
+    for det in p_dets:
+        for ex_det in _cisd_determinants(det, n_spin_orbitals):
+            if ex_det not in p_set:
+                q_set.add(ex_det)
+    q_dets = list(q_set)
+
+    all_dets = p_dets + q_dets
+    H_full = _projected_hamiltonian(fermionic_op, all_dets)
+    e0_all = _unperturbed_det_energies(all_dets, H_full, mf, ncore, n_active, h0_type=h0_type)
+
+    # 1. Diagonalize H inside the small model space P to resolve degeneracies
+    H_pp = H_full[:p_size, :p_size].toarray()
+    e_p, v_p = np.linalg.eigh(H_pp)
+    c0 = v_p[:, :k]  # shape: (p_size, k)
+
+    # 2. First-order correction in Q-space via single sparse matmul + element-wise division
+    coefficients = np.zeros((len(all_dets), k), dtype=complex)
+    coefficients[:p_size, :] = c0
+
+    if q_dets:
+        H_qp = H_full[p_size:, :p_size]
+        v_eff = H_qp @ c0  # <D' | H | psi_i^(0)>
+        e0_p = e0_all[:p_size]
+        e0_q = e0_all[p_size:]
+
+        # Unperturbed energy E_i^(0) of each good 0th-order state
+        e0_states = np.sum((np.abs(c0) ** 2) * e0_p[:, None], axis=0)
+        denom = e0_states[None, :] - e0_q[:, None]
+
+        # Guard against accidental near-zero denominators
+        safe_mask = np.abs(denom) > deg_tol
+        c1 = np.where(safe_mask, v_eff / np.where(safe_mask, denom, 1.0), 0.0)
+        coefficients[p_size:, :] = c1
+
+    # Orthonormalize (Lowdin) so initial reference states remain strictly orthogonal
+    overlap = coefficients.conj().T @ coefficients
+    eigvals, eigvecs = np.linalg.eigh(overlap)
+    inv_sqrt = eigvecs @ np.diag(1.0 / np.sqrt(np.asarray(eigvals, dtype=float))) @ eigvecs.conj().T
+    coefficients = coefficients @ inv_sqrt
+
+    print(f"[SS-COMPASS] DPT1 model space dim={p_size}, Q space dim={len(q_dets)}")
+    print(f"[SS-COMPASS] DPT1 1st-order energies (E0 + E1): {e_p[:k]}")
+
+    return _determinants_to_circuits(all_dets, coefficients, n_spin_orbitals)
+
 # ----------------
 # Timestamped progress logging
 # ----------------
@@ -306,13 +379,14 @@ def _progress(message: str, start_time: float | None = None) -> None:
 # Main Callable
 # ----------------
 def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states: int, weights: list,
-                   charge: int = 0, spin: int = 0, init_states: list[QuantumCircuit] | None = None, method: str | None = "Single det", 
+                   charge: int = 0, spin: int = 0, init_states: list[QuantumCircuit] | None = None, method: str | None = "dpt1", 
                    threshold: list = [1e-5,5e-6], active_space: list | None = None, s_weights: list | None = None) -> dict|None:
 
     run_start = perf_counter()
     _progress(f"Run started | geometry={d_eq} Å | basis={basis_set} | charge={charge} | spin={spin} | states={no_init_states}")
 
-    N_workers = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else (os.cpu_count() or 1)
+    sched_getaffinity = getattr(os, "sched_getaffinity", None)
+    N_workers = len(cast(Any, sched_getaffinity(0))) if callable(sched_getaffinity) else (os.cpu_count() or 1)
     
     if s_weights is None:
         sum_w = sum(weights)
@@ -381,8 +455,8 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
 
     def _init_states(method, no_init_states, num_spatial_orbitals, num_particles):
         method = str(method).lower()
-        if method in ("single det", "singledet"):
-            return _init_single_det_states(fermionic_op, mf, ncore, num_spatial_orbitals, no_init_states)
+        if method in ("dpt1", "pt1", "dpt"):
+            return _init_dpt1_states(fermionic_op, mf, ncore, num_spatial_orbitals, no_init_states)
         elif method == "cis":
             return _init_cis_states(fermionic_op, mf, ncore, num_spatial_orbitals, no_init_states)
         elif method == "cisd":
