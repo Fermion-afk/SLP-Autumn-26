@@ -107,11 +107,9 @@ def _Sp_ex(num_spatial_orbitals, num_particles):
 # ------------------
 def _t2_screen_worker(args):
     idx, hamiltonian, transpiled_circuit, shift, weights, s_weights, initial_energies = args
-
     estimator = StatevectorEstimator()
     optimizer = L_BFGS_B(maxfun=200_000, maxiter=10_000)
-    ss_vqe = SS_VQE(estimator, transpiled_circuit, weights, optimizer,
-                    initial_point=np.array([0.0]))
+    ss_vqe = SS_VQE(estimator, transpiled_circuit, weights, optimizer, initial_point=np.array([0.0]))
     result = ss_vqe.compute_minimum_eigenvalue(hamiltonian)
     optimal_point = np.asarray(result.optimal_point).reshape(-1)
     theta_t2 = float(optimal_point[0])
@@ -119,23 +117,22 @@ def _t2_screen_worker(args):
     delta_energies = state_energies - initial_energies
     screening_score = float(np.dot(s_weights, delta_energies))
 
-    return idx, screening_score, theta_t2, state_energies
+    return idx, screening_score, theta_t2, state_energies, delta_energies
 
 def _s_screen_worker(args):
     idx, hamiltonian, transpiled_circuit, shift, weights, s_weights, baseline_energies, theta_t2 = args
-
     estimator = StatevectorEstimator()
     optimizer = L_BFGS_B(maxfun=200_000, maxiter=10_000)
-    ss_vqe = SS_VQE(estimator, transpiled_circuit, weights, optimizer,
-                    initial_point=np.array([theta_t2, 0.01]))
+    ss_vqe = SS_VQE(estimator, transpiled_circuit, weights, optimizer, initial_point=np.array([theta_t2, 0.01]))
     result = ss_vqe.compute_minimum_eigenvalue(hamiltonian)
     optimal_point = np.asarray(result.optimal_point).reshape(-1)
+    theta_t2_final = float(optimal_point[0])
     theta_s = float(optimal_point[1])
     state_energies = _state_energies(estimator, transpiled_circuit, hamiltonian, optimal_point, shift)
     delta_energies = state_energies - baseline_energies
     screening_score = float(np.dot(s_weights, delta_energies))
 
-    return idx, screening_score, theta_s, state_energies
+    return idx, screening_score, theta_t2_final, theta_s, state_energies, delta_energies
 
 def _print_ansatz(op_info):
     n = len(op_info)
@@ -213,13 +210,11 @@ def _cisd_determinants(hf_det, n_spin_orbitals):
 def _projected_hamiltonian(fermionic_op, determinants):
     basis = {det: i for i, det in enumerate(determinants)}
     rows, cols, data = [], [], []
-
     for label, coeff in fermionic_op.terms():
-        operators = [(token[0], int(token[2:])) for token in label.split()]
         for col, det in enumerate(determinants):
             target = det
             sign = 1
-            for action, p in reversed(operators):
+            for action, p in reversed(label):
                 occupied = (target >> p) & 1
                 if (action == "+" and occupied) or (action == "-" and not occupied):
                     break
@@ -504,26 +499,35 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
 
     stage_start = perf_counter()
     t2_raw = []
-    n_workers = min(N_workers, len(t2_args)) # Checks for no of parallel processors(workers) available 
+    n_workers = min(N_workers, len(t2_args))
 
     _progress(f"T2 screening started | workers={n_workers}", run_start)
 
-    # Runs T2 screening parallely across several T2 operators
     with ProcessPoolExecutor(max_workers=n_workers, mp_context=_ctx) as executor:
         futures = [executor.submit(_t2_screen_worker, args) for args in t2_args]
 
         for i, future in enumerate(as_completed(futures), 1):
             t2_raw.append(future.result())
-
             if i == 1 or i % max(1, n_t2 // 20) == 0 or i == n_t2:
                 _progress(f"T2 screening: {i}/{n_t2} ({100*i/n_t2:.1f}%)", run_start)
 
-    t2_screen = sorted([(score, idx, theta, energies) #Sorts and screens the operator based on the their Post optimization energy difference 
-            for idx, score, theta, energies in t2_raw
-            if abs(score) > threshold_array[0]],
-            key=lambda item: abs(item[0]),
-            reverse=True)
- 
+    t2_raw.sort(key=lambda x: x[0])
+
+    t2_screen = sorted([(score, idx, theta, energies)
+                        for idx, score, theta, energies, delta in t2_raw
+                        if abs(score) > threshold_array[0]],
+                    key=lambda item: abs(item[0]), reverse=True)
+
+    t2_screening_data = []
+    for idx, score, theta, energies, delta in t2_raw:
+        t2_screening_data.append({"operator_id": idx,
+                    "excitation": str(t2_excitations[idx]),
+                    "delta_energies": delta.tolist(),
+                    "weighted_sum": score,
+                    "threshold": float(threshold_array[0]),
+                    "selected": bool(abs(score) > threshold_array[0]),
+                    "theta_t2": theta})
+
     _progress(f"T2 screening complete | accepted={len(t2_screen)}/{n_t2} "
             f"| stage took {perf_counter()-stage_start:.1f} s",
             run_start)
@@ -610,21 +614,35 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
         _progress(f"S screening complete | screened={n_s} | workers={n_workers} "
                   f"| stage took {perf_counter() - stage_start:.1f} s", run_start)
 
-        s_results = {cand_idx: (score, theta_s, state_energies)
-                     for cand_idx, score, theta_s, state_energies in s_raw}
-
+        s_results = {cand_idx: (score, theta_t2_final, theta_s, state_energies, delta_energies)
+            for cand_idx, score, theta_t2_final, theta_s, state_energies, delta_energies in s_raw}
     else:
         s_results = {}
 
     s_by_rank = defaultdict(list)
+    s_screening_data = []
 
     for cand_idx, rank, t2_idx, s_type, s_idx, theta_t2, t2_energies in s_candidates:
-        screening_score, opt_s_theta, state_energies = s_results[cand_idx]
+        screening_score, theta_t2_final, opt_s_theta, state_energies, delta_energies = s_results[cand_idx]
+        selected = abs(screening_score) > threshold_array[1]
+        label = "S-hole" if s_type == "h" else "S-particle"
+        s_ex = sh_excitations[s_idx] if s_type == "h" else sp_excitations[s_idx]
 
-        if abs(screening_score) > threshold_array[1]:
+        s_screening_data.append({"candidate_id": cand_idx,
+                    "parent_t2_id": t2_idx,
+                    "type": label,
+                    "operator_id": s_idx,
+                    "excitation": str(s_ex),
+                    "delta_energies": delta_energies.tolist(),
+                    "weighted_sum": screening_score,
+                    "threshold": float(threshold_array[1]),
+                    "selected": bool(selected),
+                    "theta_t2_initial": theta_t2,
+                    "theta_t2_final": theta_t2_final,
+                    "theta_s": opt_s_theta})
+
+        if selected:
             s_pauli = sh_paulis[s_idx] if s_type == "h" else sp_paulis[s_idx]
-            s_ex = sh_excitations[s_idx] if s_type == "h" else sp_excitations[s_idx]
-            label = "S-hole" if s_type == "h" else "S-particle"
             s_by_rank[rank].append((s_pauli, s_ex, label, opt_s_theta))
 
     n_s_accepted = sum(len(operators) for operators in s_by_rank.values())
@@ -679,10 +697,12 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
 
     _progress(f"Run complete | total elapsed {perf_counter()-run_start:.1f} s", run_start)
     return {'geometry': d_eq,
-            'energies': state_energies,
-            'n_params': len(final_opt_t),
-            'exact_energies': exact_energies,
-            'initial_energies': initial_energies,
-            'ansatz': final_ansatze,
-            'optimal_params': final_result.optimal_point,
-            'op_info': final_op_info}
+        'energies': state_energies,
+        'n_params': len(final_opt_t),
+        'exact_energies': exact_energies,
+        'initial_energies': initial_energies,
+        'ansatz': final_ansatze,
+        'optimal_params': final_result.optimal_point,
+        'op_info': final_op_info,
+        't2_screening': t2_screening_data,
+        's_screening': s_screening_data}
