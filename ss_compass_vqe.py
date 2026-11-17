@@ -22,13 +22,13 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime
 from time import perf_counter
 
-
 # Qiskit and Qiskit_algorithms (circuits and primitives)
 from qiskit import transpile as qk_transpile
 from qiskit.circuit import QuantumCircuit
 from qiskit.circuit.library import EvolvedOperatorAnsatz
 from qiskit.circuit.library import StatePreparation
 from qiskit.primitives import StatevectorEstimator
+from qiskit.circuit.library import UnitaryGate
 from qiskit.quantum_info import Statevector
 from qiskit_algorithms.optimizers import L_BFGS_B
 
@@ -221,18 +221,69 @@ def _lowest_eigenvectors(H, k):
     return energies[order], vectors[:, order]
 
 def _determinants_to_circuits(determinants, coefficients, n_spin_orbitals):
+    """Prepare sparse CI superpositions via exact Givens rotations (avoids dense StatePreparation)."""
     circuits = []
     for i in range(coefficients.shape[1]):
-        statevector = np.zeros(2**n_spin_orbitals, dtype=complex)
-        statevector[determinants] = coefficients[:, i]
-
-        norm = np.linalg.norm(statevector)
-        if norm < 1e-12:
+        nz = [(det, complex(c)) for det, c in zip(determinants, coefficients[:, i]) if abs(c) > 1e-14]
+        if not nz:
             raise ValueError("Initial state has zero norm.")
 
+        dets = [d for d, _ in nz]
+        amps = np.asarray([c for _, c in nz], dtype=complex)
+        amps /= np.linalg.norm(amps)
+
+        # Build the disentangling circuit |psi> -> |0...0>, then invert it
         qc = QuantumCircuit(n_spin_orbitals, name=f"init_state_{i}")
-        qc.append(StatePreparation(Statevector(statevector / norm)), range(n_spin_orbitals))
-        circuits.append(qc)
+        for m in range(len(dets) - 1, 0, -1):
+            b_prev, b_curr = dets[m - 1], dets[m]
+            c_prev, c_curr = amps[m - 1], amps[m]
+            r = float(np.hypot(abs(c_prev), abs(c_curr)))
+            if r < 1e-15:
+                continue
+
+            diff = b_prev ^ b_curr
+            target = (diff & -diff).bit_length() - 1
+            flip_target = ((b_curr >> target) & 1) == 0
+            if flip_target:
+                qc.x(target)
+                b_prev ^= 1 << target
+                b_curr ^= 1 << target
+
+            other_diffs = [q for q in range(n_spin_orbitals) if q != target and ((diff >> q) & 1)]
+            for q in other_diffs:
+                qc.cx(target, q)
+                b_curr ^= 1 << q  # b_prev has 0 on target, so only b_curr flips
+
+            ctrls = [q for q in range(n_spin_orbitals) if q != target]
+            zero_ctrls = [q for q in ctrls if not ((b_prev >> q) & 1)]
+            for q in zero_ctrls:
+                qc.x(q)
+
+            givens = np.array(
+                [[np.conj(c_prev) / r, np.conj(c_curr) / r], [-c_curr / r, c_prev / r]],
+                dtype=complex,
+            )
+            qc.append(UnitaryGate(givens).control(len(ctrls)), [*ctrls, target])
+
+            for q in zero_ctrls:
+                qc.x(q)
+            for q in reversed(other_diffs):
+                qc.cx(target, q)
+            if flip_target:
+                qc.x(target)
+
+            amps[m - 1] = r
+
+        for q in range(n_spin_orbitals):
+            if (dets[0] >> q) & 1:
+                qc.x(q)
+        if abs(amps[0] - 1.0) > 1e-12:
+            qc.global_phase = -float(np.angle(amps[0]))
+
+        inv_qc = qc.inverse()
+        inv_qc.name = f"init_state_{i}"
+        circuits.append(inv_qc)
+
     return circuits
 
 def _init_cis_states(fermionic_op, mf, ncore, n_active, k):
@@ -269,104 +320,67 @@ def _init_cisd_states(fermionic_op, mf, ncore, n_active, k):
 
     return _determinants_to_circuits(determinants, coefficients, n_spin_orbitals)
 
-def _unperturbed_det_energies(determinants, H_proj, mf, ncore, n_active, h0_type="mp"):
-    """Compute E_D^(0) for each determinant under Møller–Plesset ('mp') or Epstein–Nesbet ('en')."""
-    if h0_type == "en":
-        return np.real(H_proj.diagonal())
-
-    mo_e = mf.mo_energy
-    if isinstance(mo_e, tuple) or (isinstance(mo_e, np.ndarray) and mo_e.ndim == 2):
-        eps_alpha = np.asarray(mo_e[0][ncore:ncore + n_active], dtype=float)
-        eps_beta = np.asarray(mo_e[1][ncore:ncore + n_active], dtype=float)
-    else:
-        eps_alpha = np.asarray(mo_e[ncore:ncore + n_active], dtype=float)
-        eps_beta = eps_alpha
-    spin_eps = np.concatenate((eps_alpha, eps_beta))
-
+def _diagonal_det_energies(fermionic_op, determinants):
+    """Evaluate diagonal expectation values <D|H|D> for bit-encoded determinants."""
+    diag_terms = [
+        (label, coeff)
+        for label, coeff in fermionic_op.terms()
+        if sorted(p for act, p in label if act == "+") == sorted(p for act, p in label if act == "-")
+    ]
     energies = np.zeros(len(determinants), dtype=float)
     for idx, det in enumerate(determinants):
-        e0 = 0.0
-        bits = det
-        while bits:
-            lsb = bits & -bits
-            p = lsb.bit_length() - 1
-            e0 += spin_eps[p]
-            bits ^= lsb
-        energies[idx] = e0
+        energy = 0.0
+        for label, coeff in diag_terms:
+            target = det
+            sign = 1
+            for action, p in reversed(label):
+                occupied = (target >> p) & 1
+                if (action == "+" and occupied) or (action == "-" and not occupied):
+                    break
+                sign *= (-1) ** ((target & ((1 << p) - 1)).bit_count())
+                target = target | (1 << p) if action == "+" else target ^ (1 << p)
+            else:
+                if target == det:
+                    energy += float(np.real(coeff * sign))
+        energies[idx] = energy
     return energies
 
-def _init_dpt1_states(fermionic_op, mf, ncore, n_active, k, deg_tol=1e-5, h0_type="mp"):
-    """Generate the lowest-k first-order degenerate perturbation theory (DPT1) states."""
+def _init_sci_states(fermionic_op, mf, ncore, n_active, k, pool="cisd", deg_tol=1e-6):
+    """Generate the lowest-k Selected-CI (SCI) subspace projection states."""
     if k < 1:
         raise ValueError("At least one reference state is required.")
 
     n_spin_orbitals = 2 * n_active
     hf_det = _active_hf_determinant(mf, ncore, n_active)
 
-    # Seed candidate pool from CISD around HF so all low-lying determinants are present
-    seed_dets = _cisd_determinants(hf_det, n_spin_orbitals)
-    if len(seed_dets) < k:
-        raise ValueError(f"Requested {k} states, but only {len(seed_dets)} seed determinants exist.")
+    if pool.lower() == "cisd":
+        candidates = _cisd_determinants(hf_det, n_spin_orbitals)
+    elif pool.lower() == "cis":
+        candidates = _cis_determinants(hf_det, n_spin_orbitals)
+    else:
+        raise ValueError(f"Unknown pool type: {pool}")
 
-    H_seed = _projected_hamiltonian(fermionic_op, seed_dets) if h0_type == "en" else None
-    e0_seed = _unperturbed_det_energies(seed_dets, H_seed, mf, ncore, n_active, h0_type=h0_type)
+    if k > len(candidates):
+        raise ValueError(f"Requested {k} states, but only {len(candidates)} candidate determinants exist.")
 
-    order = np.argsort(e0_seed)
-    sorted_dets = [seed_dets[i] for i in order]
-    sorted_e0 = e0_seed[order]
+    diag_energies = _diagonal_det_energies(fermionic_op, candidates)
+    sorted_pairs = sorted(zip(diag_energies, candidates), key=lambda x: x[0])
+    sorted_energies = np.array([e for e, _ in sorted_pairs], dtype=float)
+    sorted_dets = [d for _, d in sorted_pairs]
 
-    # Expand model space P to include all states degenerate/quasi-degenerate with the k-th state
-    cutoff_e0 = sorted_e0[k - 1] + deg_tol
-    p_size = int(np.searchsorted(sorted_e0, cutoff_e0, side="right"))
-    p_dets = sorted_dets[:p_size]
-    p_set = set(p_dets)
+    cutoff = sorted_energies[k - 1] + deg_tol
+    cutoff_idx = int(np.searchsorted(sorted_energies, cutoff, side="right"))
+    selected_dets = sorted_dets[:cutoff_idx]
+    selected_diag_energies = sorted_energies[:cutoff_idx]
 
-    # Orthogonal space Q: all singles & doubles out of every P-space determinant
-    q_set = set()
-    for det in p_dets:
-        for ex_det in _cisd_determinants(det, n_spin_orbitals):
-            if ex_det not in p_set:
-                q_set.add(ex_det)
-    q_dets = list(q_set)
+    H_sub = _projected_hamiltonian(fermionic_op, selected_dets).toarray()
+    sub_energies, sub_vectors = np.linalg.eigh(H_sub)
 
-    all_dets = p_dets + q_dets
-    H_full = _projected_hamiltonian(fermionic_op, all_dets)
-    e0_all = _unperturbed_det_energies(all_dets, H_full, mf, ncore, n_active, h0_type=h0_type)
+    print(f"[SS-COMPASS] Selected-CI determinants (dim={len(selected_dets)}): {selected_dets}")
+    print(f"[SS-COMPASS] Selected-CI diagonal energies: {selected_diag_energies}")
+    print(f"[SS-COMPASS] Selected-CI subspace eigenvalues: {sub_energies[:k]}")
 
-    # 1. Diagonalize H inside the small model space P to resolve degeneracies
-    H_pp = H_full[:p_size, :p_size].toarray()
-    e_p, v_p = np.linalg.eigh(H_pp)
-    c0 = v_p[:, :k]  # shape: (p_size, k)
-
-    # 2. First-order correction in Q-space via single sparse matmul + element-wise division
-    coefficients = np.zeros((len(all_dets), k), dtype=complex)
-    coefficients[:p_size, :] = c0
-
-    if q_dets:
-        H_qp = H_full[p_size:, :p_size]
-        v_eff = H_qp @ c0  # <D' | H | psi_i^(0)>
-        e0_p = e0_all[:p_size]
-        e0_q = e0_all[p_size:]
-
-        # Unperturbed energy E_i^(0) of each good 0th-order state
-        e0_states = np.sum((np.abs(c0) ** 2) * e0_p[:, None], axis=0)
-        denom = e0_states[None, :] - e0_q[:, None]
-
-        # Guard against accidental near-zero denominators
-        safe_mask = np.abs(denom) > deg_tol
-        c1 = np.where(safe_mask, v_eff / np.where(safe_mask, denom, 1.0), 0.0)
-        coefficients[p_size:, :] = c1
-
-    # Orthonormalize (Lowdin) so initial reference states remain strictly orthogonal
-    overlap = coefficients.conj().T @ coefficients
-    eigvals, eigvecs = np.linalg.eigh(overlap)
-    inv_sqrt = eigvecs @ np.diag(1.0 / np.sqrt(np.asarray(eigvals, dtype=float))) @ eigvecs.conj().T
-    coefficients = coefficients @ inv_sqrt
-
-    print(f"[SS-COMPASS] DPT1 model space dim={p_size}, Q space dim={len(q_dets)}")
-    print(f"[SS-COMPASS] DPT1 1st-order energies (E0 + E1): {e_p[:k]}")
-
-    return _determinants_to_circuits(all_dets, coefficients, n_spin_orbitals)
+    return _determinants_to_circuits(selected_dets, sub_vectors[:, :k], n_spin_orbitals)
 
 # ----------------
 # Timestamped progress logging
@@ -379,7 +393,7 @@ def _progress(message: str, start_time: float | None = None) -> None:
 # Main Callable
 # ----------------
 def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states: int, weights: list,
-                   charge: int = 0, spin: int = 0, init_states: list[QuantumCircuit] | None = None, method: str | None = "dpt1", 
+                   charge: int = 0, spin: int = 0, init_states: list[QuantumCircuit] | None = None, method: str | None = "sci", 
                    threshold: list = [1e-5,5e-6], active_space: list | None = None, s_weights: list | None = None) -> dict|None:
 
     run_start = perf_counter()
@@ -455,8 +469,8 @@ def ss_compass_vqe(coordinates: str, d_eq: float, basis_set: str, no_init_states
 
     def _init_states(method, no_init_states, num_spatial_orbitals, num_particles):
         method = str(method).lower()
-        if method in ("dpt1", "pt1", "dpt"):
-            return _init_dpt1_states(fermionic_op, mf, ncore, num_spatial_orbitals, no_init_states)
+        if method == "sci":
+            return _init_sci_states(fermionic_op, mf, ncore, num_spatial_orbitals, no_init_states)
         elif method == "cis":
             return _init_cis_states(fermionic_op, mf, ncore, num_spatial_orbitals, no_init_states)
         elif method == "cisd":
