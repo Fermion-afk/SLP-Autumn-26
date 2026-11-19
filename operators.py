@@ -21,13 +21,18 @@ def _mr_singles(n: int, inactive_occ: list[int], active_occ: list[int],
     active_virt: list[int], inactive_virt: list[int]) -> list[tuple[tuple[int], tuple[int]]]:
     holes = sorted(set(inactive_occ) | set(active_occ))
     particles = sorted(set(active_virt) | set(inactive_virt))
-    return [((i,), (a,)) for i in holes for a in particles]
+    return [((i,), (a,)) for i in holes for a in particles if (i < n) == (a < n)]
 
 def _mr_doubles(n: int, inactive_occ: list[int], active_occ: list[int],
     active_virt: list[int], inactive_virt: list[int]) -> list[tuple[tuple[int, int], tuple[int, int]]]:
     holes = sorted(set(inactive_occ) | set(active_occ))
     particles = sorted(set(active_virt) | set(inactive_virt))
-    return [((i, j), (a, b)) for i, j in combinations(holes, 2) for a, b in combinations(particles, 2)]
+    return [
+        ((i, j), (a, b))
+        for i, j in combinations(holes, 2)
+        for a, b in combinations(particles, 2)
+        if ((i < n) + (j < n)) == ((a < n) + (b < n))
+    ]
 
 def _sh_excitations(n: int, inactive_occ: list[int], active_occ: list[int],
     active_virt: list[int], inactive_virt: list[int]) -> list[tuple[tuple[int, int], tuple[int, int]]]:
