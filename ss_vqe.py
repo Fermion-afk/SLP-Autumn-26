@@ -283,9 +283,11 @@ class SS_VQE(VariationalAlgorithm, MinimumEigensolver):
             cost_values = np.sum(np.asarray(weights)[:, None] * energies, axis=0)
 
             if self.callback is not None:
-                for params, value in zip(parameters, cost_values):
+                for idx_p, (params, value) in enumerate(zip(parameters, cost_values)):
                     eval_count += 1
-                    self.callback(eval_count, params, value, results[0].metadata)
+                    meta = dict(results[0].metadata)
+                    meta["state_energies"] = energies[:, idx_p].copy()
+                    self.callback(eval_count, params, float(value), meta)
 
             return cost_values[0] if len(cost_values) == 1 else cost_values
 

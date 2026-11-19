@@ -7,8 +7,8 @@ from typing import Any
 from pyscf import fci
 
 import numpy as np
+from qiskit import transpile as qk_transpile
 from qiskit.circuit import QuantumCircuit
-from qiskit.circuit.library import UnitaryGate
 from scipy.sparse import coo_matrix
 from scipy.sparse.linalg import eigsh
 
@@ -76,66 +76,79 @@ def compute_s2_expectation(determinants: list[int], coeffs: np.ndarray, n_spatia
                 s_plus[det ^ (1 << p_a) ^ (1 << p_b)] += sign * c
     return float(np.real(sz_part + sum(abs(a) ** 2 for a in s_plus.values())))
 
-def determinants_to_circuits(
-    determinants: list[int], coefficients: np.ndarray, n_spin_orbitals: int
-) -> list[QuantumCircuit]:
-    """Prepare sparse CI superpositions via exact Givens rotations."""
-    circuits = []
-    for i in range(coefficients.shape[1]):
-        nz = [(det, complex(c)) for det, c in zip(determinants, coefficients[:, i]) if abs(c) > 1e-14]
-        if not nz:
-            raise ValueError(f"Initial state {i} has zero norm.")
-        dets = [d for d, _ in nz]
-        amps = np.asarray([c for _, c in nz], dtype=complex)
-        amps /= np.linalg.norm(amps)
+def determinants_to_circuits(dets: list[int], evecs: np.ndarray, num_spin_orbitals: int) -> list[QuantumCircuit]:
+    """Compile sparse determinant statevectors into purely unitary U/CX circuits (no initialize/reset)."""
+    circuits: list[QuantumCircuit] = []
+    for col in range(evecs.shape[1]):
+        terms = [(det, complex(amp)) for det, amp in zip(dets, evecs[:, col]) if abs(amp) > 1e-12]
+        qc = QuantumCircuit(num_spin_orbitals)
+        if not terms:
+            circuits.append(qc)
+            continue
 
-        qc = QuantumCircuit(n_spin_orbitals, name=f"init_state_{i}")
-        for m in range(len(dets) - 1, 0, -1):
-            b_prev, b_curr = dets[m - 1], dets[m]
-            c_prev, c_curr = amps[m - 1], amps[m]
-            r = float(np.hypot(abs(c_prev), abs(c_curr)))
-            if r < 1e-15:
-                continue
+        norm = float(np.linalg.norm([a for _, a in terms]))
+        terms = [(d, a / norm) for d, a in terms]
 
-            diff = b_prev ^ b_curr
-            target = (diff & -diff).bit_length() - 1
-            flip_target = ((b_curr >> target) & 1) == 0
-            if flip_target:
+        # Build sequential unitary Givens rotations transforming |0...0> -> sum_k a_k |d_k>
+        # Step k rotates remaining weight on |0...0> into |d_k> via a pivot bit where d_k has a 1
+        # that distinguishes it from all previously populated determinants d_0..d_{k-1}.
+        # Order determinants so every d_k (except possibly one |0...0>) has at least one 1-bit
+        # not shared as a distinguishing conflict, using binary-tree decomposition on active qubits.
+        active_qubits = sorted({q for d, _ in terms for q in range(num_spin_orbitals) if (d >> q) & 1})
+        if not active_qubits:
+            phase0 = float(np.angle(terms[0][1]))
+            if abs(phase0) > 1e-12:
+                qc.rz(-2.0 * phase0, 0)
+                qc.x(0)
+                qc.rz(2.0 * phase0, 0)
+                qc.x(0)
+            circuits.append(qc)
+            continue
+
+        # Recursive sparse Schmidt / binary-tree state preparation over active_qubits (exact, unitary, zero ancillas)
+        sub_dim = 1 << len(active_qubits)
+        sub_sv = np.zeros(sub_dim, dtype=complex)
+        for d, a in terms:
+            sub_idx = sum(((d >> q) & 1) << bit for bit, q in enumerate(active_qubits))
+            sub_sv[sub_idx] = a
+
+        def _prep_subspace(qubits: list[int], vec: np.ndarray, ctrls: list[int]) -> None:
+            if len(qubits) == 0:
+                ph = float(np.angle(vec[0]))
+                if abs(ph) > 1e-12:
+                    if len(ctrls) == 1:
+                        qc.p(ph, ctrls[0])
+                    elif len(ctrls) > 1:
+                        qc.mcp(ph, ctrls[:-1], ctrls[-1])
+                return
+
+            half = 1 << (len(qubits) - 1)
+            v0, v1 = vec[:half], vec[half:]
+            n0, n1 = float(np.linalg.norm(v0)), float(np.linalg.norm(v1))
+            tot = float(np.hypot(n0, n1))
+            if tot < 1e-15:
+                return
+
+            target = qubits[-1]
+            rest = qubits[:-1]
+            theta = 2.0 * float(np.arctan2(n1, n0))
+            if abs(theta) > 1e-12:
+                if ctrls:
+                    qc.mcry(theta, ctrls, target)
+                else:
+                    qc.ry(theta, target)
+
+            if n0 > 1e-14:
                 qc.x(target)
-                b_prev ^= 1 << target
-                b_curr ^= 1 << target
-
-            other_diffs = [q for q in range(n_spin_orbitals) if q != target and ((diff >> q) & 1)]
-            for q in other_diffs:
-                qc.cx(target, q)
-                b_curr ^= 1 << q
-
-            ctrls = [q for q in range(n_spin_orbitals) if q != target]
-            zero_ctrls = [q for q in ctrls if not ((b_prev >> q) & 1)]
-            for q in zero_ctrls:
-                qc.x(q)
-
-            givens = np.array([[np.conj(c_prev) / r, np.conj(c_curr) / r], [-c_curr / r, c_prev / r]], dtype=complex)
-            qc.append(UnitaryGate(givens).control(len(ctrls)), [*ctrls, target])
-
-            for q in zero_ctrls:
-                qc.x(q)
-            for q in reversed(other_diffs):
-                qc.cx(target, q)
-            if flip_target:
+                _prep_subspace(rest, v0 / n0, ctrls + [target])
                 qc.x(target)
-            amps[m - 1] = r
+            if n1 > 1e-14:
+                _prep_subspace(rest, v1 / n1, ctrls + [target])
 
-        for q in range(n_spin_orbitals):
-            if (dets[0] >> q) & 1:
-                qc.x(q)
-        if abs(amps[0] - 1.0) > 1e-12:
-            qc.global_phase = -float(np.angle(amps[0]))
+        _prep_subspace(active_qubits, sub_sv, [])
+        circuits.append(qc)
 
-        inv_qc = qc.inverse()
-        inv_qc.name = f"init_state_{i}"
-        circuits.append(inv_qc)
-    return circuits
+    return qk_transpile(circuits, basis_gates=["u", "cx"], optimization_level=1)
 
 def state_energies(
     estimator: Any, ansatze: Sequence[QuantumCircuit], operator: Any, point: np.ndarray | None = None, shift: float = 0.0

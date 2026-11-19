@@ -61,13 +61,13 @@ def build_operator_pools(num_spatial_orbitals: int, num_particles: tuple[int, in
     args = (num_spatial_orbitals, inactive_occ, active_occ, active_virt, inactive_virt)
 
     ucc_s = UCC(num_particles=num_particles, num_spatial_orbitals=num_spatial_orbitals,
-                excitations=lambda *_: _mr_singles(*args), initial_state=hf_ref, qubit_mapper=mapper)
+                excitations=lambda *_, **__: _mr_singles(*args), initial_state=hf_ref, qubit_mapper=mapper)
     ucc_d = UCC(num_particles=num_particles, num_spatial_orbitals=num_spatial_orbitals,
-                excitations=lambda *_: _mr_doubles(*args), initial_state=hf_ref, qubit_mapper=mapper)
+                excitations=lambda *_, **__: _mr_doubles(*args), initial_state=hf_ref, qubit_mapper=mapper)
     ucc_sh = UCC(num_particles=num_particles, num_spatial_orbitals=num_spatial_orbitals,
-                 excitations=lambda *_: _sh_excitations(*args), initial_state=hf_ref, qubit_mapper=mapper)
+                 excitations=lambda *_, **__: _sh_excitations(*args), initial_state=hf_ref, qubit_mapper=mapper)
     ucc_sp = UCC(num_particles=num_particles, num_spatial_orbitals=num_spatial_orbitals,
-                 excitations=lambda *_: _sp_excitations(*args), initial_state=hf_ref, qubit_mapper=mapper)
+                 excitations=lambda *_, **__: _sp_excitations(*args), initial_state=hf_ref, qubit_mapper=mapper)
 
     return {"s_excitations": list(ucc_s.excitation_list or []), "s_paulis": [mapper.map(op) for op in ucc_s.excitation_ops()],
             "t2_excitations": list(ucc_d.excitation_list or []), "t2_paulis": [mapper.map(op) for op in ucc_d.excitation_ops()],

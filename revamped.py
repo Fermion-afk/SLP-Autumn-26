@@ -1,5 +1,4 @@
 from __future__ import annotations
-from ss_vqe import SS_VQE
 
 import multiprocessing as mp
 import os
@@ -15,6 +14,7 @@ from time import perf_counter
 from typing import Any, cast
 
 import numpy as np
+from pyscf import ao2mo
 from qiskit import transpile as qk_transpile
 from qiskit.circuit import QuantumCircuit
 from qiskit.circuit.library import EvolvedOperatorAnsatz
@@ -55,8 +55,8 @@ class ss_compass_vqe:
         screening_weights: Sequence[float] | None = None,
         nfc: bool = True,
         log_file: str | Path | None = None,
-        occ_threshold: float = 1.8,
-        virt_threshold: float = 0.2,
+        occ_threshold: float = 1.90,
+        virt_threshold: float = 0.1,
     ) -> None:
         self.coordinates = coordinates
         self.spin = int(spin)
@@ -354,11 +354,9 @@ class ss_compass_vqe:
         self.hf_energy = float(self.mf.e_tot)
 
         if not self.mf.converged:
-            raise RuntimeError(
-                f"SCF failed to converge after {self.mf.max_cycle} cycles. "
-                f"Last energy: {self.mf.e_tot:.12f} Ha"
-            )
-
+            raise RuntimeError(f"SCF failed to converge after {self.mf.max_cycle} cycles. "
+                            f"Last energy: {self.mf.e_tot:.12f} Ha")
+        
         if self.nfc:
             es_problem = cast(ElectronicStructureProblem, FreezeCoreTransformer(freeze_core=True).transform(es_problem))
 
@@ -377,9 +375,18 @@ class ss_compass_vqe:
         self.mo_energy = np.asarray(self.mf.mo_energy[self.ncore:self.ncore + m], dtype=float)
         self.mo_occ = np.asarray(self.mf.mo_occ[self.ncore:self.ncore + m], dtype=float)
 
-        integrals = es_problem.hamiltonian.electronic_integrals.alpha
-        self.h1e = np.asarray(integrals["+-"], dtype=float)
-        self.h2e = np.asarray(integrals["++--"], dtype=float)
+        c_act = self.mo_coeff
+        h1_ao = self.mf.get_hcore()
+        if self.ncore > 0:
+            c_core = np.asarray(self.mf.mo_coeff[:, :self.ncore], dtype=float)
+            dm_core = 2.0 * (c_core @ c_core.T)
+            vj, vk = self.mf.get_jk(dm=dm_core)
+            h1_ao = h1_ao + vj - 0.5 * vk
+
+        self.h1e = np.asarray(c_act.T @ h1_ao @ c_act, dtype=float)
+        eri_chem = ao2mo.restore(1, ao2mo.kernel(self.mf.mol, c_act), m)
+        # Convert chemist's notation (pr|qs) -> physicist's notation <pq|rs> expected by ElectronicEnergy
+        self.h2e = np.asarray(np.swapaxes(eri_chem, 1, 2), dtype=float)
         self.nuclear_repulsion = float(es_problem.nuclear_repulsion_energy)
         self.shift = float(np.real(sum(es_problem.hamiltonian.constants.values())))
         self.fermionic_op = es_problem.hamiltonian.second_q_op()
@@ -485,13 +492,16 @@ class ss_compass_vqe:
         if not 0 <= target_idx < len(sci_energies):
             raise ValueError(f"state_index {target_idx} out of range for {len(sci_energies)} states.")
         dets = cast(list[int], self.sci_determinants)
-        gamma = np.asarray(build_spin_summed_1rdm(dets,sci_vecs[:,target_idx],m),dtype=float)
+
+        t_sub = perf_counter()
+        gamma = np.asarray(build_spin_summed_1rdm(dets, sci_vecs[:, target_idx], m), dtype=float)
         evals, evecs = np.linalg.eigh(gamma)
         order = np.argsort(evals)[::-1]
         self.noons = np.clip(evals[order], 0.0, 2.0)
         self.no_transform = evecs[:, order]
         self.rdm1_spatial = gamma
         self.no_coeff = cast(np.ndarray, self.mo_coeff) @ self.no_transform
+        self._log(f"   [timer] 1-RDM build & diagonalization: {perf_counter() - t_sub:.3f} s")
 
         oi_sp = [p for p, n in enumerate(self.noons) if n > self.occ_threshold]
         oa_sp = [p for p, n in enumerate(self.noons) if 1.0 <= n <= self.occ_threshold]
@@ -504,6 +514,7 @@ class ss_compass_vqe:
         self.inactive_virt = vi_sp + [p + m for p in vi_sp]
         self.active_orbitals = self.active_occ + self.active_virt
 
+        t_sub = perf_counter()
         u = self.no_transform
         self.h1e_no = u.T @ cast(np.ndarray, self.h1e) @ u
         self.h2e_no = np.einsum("pi,qj,pqrs,rk,sl->ijkl", u, u, cast(np.ndarray, self.h2e), u, u, optimize=True)
@@ -512,10 +523,24 @@ class ss_compass_vqe:
         cast(Any, self.es_problem)._hamiltonian = elec_energy
         self.fermionic_op = elec_energy.second_q_op()
         self.qubit_op = self.mapper.map(self.fermionic_op)
+        self._log(f"   [timer] NO integral transform & JW map: {perf_counter() - t_sub:.3f} s")
 
+        t_sub = perf_counter()
         self.no_determinants, self.sci_eigenvectors_no = rotate_ci_vectors_to_no(dets, sci_vecs, u, m)
-        self.init_states = determinants_to_circuits(self.no_determinants, self.sci_eigenvectors_no, n_spin)
+        self._log(f"   [timer] rotate_ci_vectors_to_no ({len(self.no_determinants)} dets): {perf_counter() - t_sub:.3f} s")
+
+        t_sub = perf_counter()
+        raw_circuits = determinants_to_circuits(self.no_determinants, self.sci_eigenvectors_no, n_spin)
+        self._log(f"   [timer] determinants_to_circuits: {perf_counter() - t_sub:.3f} s")
+
+        t_sub = perf_counter()
+        self.init_states = qk_transpile(raw_circuits, optimization_level=1)
+        depths = [qc.depth() for qc in self.init_states]
+        self._log(f"   [timer] qk_transpile init_states (depths={depths}): {perf_counter() - t_sub:.3f} s")
+
+        t_sub = perf_counter()
         self.initial_energies = state_energies(self.estimator, self.init_states, self.qubit_op, shift=e_shift)
+        self._log(f"   [timer] initial state_energies: {perf_counter() - t_sub:.3f} s")
         max_rot_err = float(np.max(np.abs(self.initial_energies - sci_energies)))
 
         self._log(f" 1-RDM constructed using SCI root {target_idx}")
@@ -596,7 +621,7 @@ class ss_compass_vqe:
     
             self.save_checkpoint("pool_creator")
             return pools
-    # ------------------------------------------------------------------
+ # ------------------------------------------------------------------
     # Stage 5a: T2 screening 
     # ------------------------------------------------------------------
     def _screen_t2(self) -> list[tuple[float, int, float, np.ndarray]]:
@@ -606,10 +631,13 @@ class ss_compass_vqe:
             self.qubit_op, cast(float, self.shift), self.weights, self.screening_weights,
             cast(np.ndarray, self.initial_energies), float(self.threshold[0]),
             self.n_workers, self._mp_ctx, self._log)
-        self._log(f"   {'Rank':>4}   {'T2_ID':>5}   {'Excitation':<28}   {'Score':>12}   {'Theta_T2':>10}")
-        self._log(f"   {'-'*4}   {'-'*5}   {'-'*28}   {'-'*12}   {'-'*10}")
-        for rank, (score, idx, theta, _) in enumerate(self.t2_screen, 1):
-            self._log(f"   {rank:>4}   {idx:>5}   {str(self.t2_excitations[idx]):<28}   {score:12.4e}   {theta:10.6f}")
+
+        t2_json_path = self.log_path.with_name(self.log_path.stem + "_t2_screening.json")
+        import json
+        with open(t2_json_path, "w", encoding="utf-8") as fh:
+            json.dump(self.t2_screening_data, fh, indent=2)
+        self._log(f" Saved T2 screening data to {t2_json_path}")
+
         self._log(f" _screen_t2 accepted {len(self.t2_screen)}/{len(self.t2_paulis)} in {perf_counter() - t0:.2f} s.")
         self.save_checkpoint("screen_t2")
         return self.t2_screen
@@ -618,10 +646,13 @@ class ss_compass_vqe:
     # ------------------------------------------------------------------
     def _screen_s(self) -> dict[int, list[tuple[Any, ...]]]:
         t0 = perf_counter()
-        self.s_candidates = build_s_candidates(self.t2_screen, self.t2_excitations, self.sh_excitations, self.sp_excitations, self.active_orbitals)
+        self.s_candidates = build_s_candidates(
+            self.t2_screen, self.t2_excitations, self.sh_excitations, self.sp_excitations, self.active_orbitals)
+
         def _periodic_chk(partial: dict[int, Any]) -> None:
             self._s_partial_results = dict(partial)
             self.save_checkpoint()
+
         self.s_by_rank, self.s_screening_data = screen_s_pool(
             self.s_candidates, self.t2_paulis, self.sh_paulis, self.sp_paulis,
             self.sh_excitations, self.sp_excitations, cast(list[QuantumCircuit], self.init_states),
@@ -629,6 +660,13 @@ class ss_compass_vqe:
             float(self.threshold[1]), self.n_workers, self._mp_ctx, self._log,
             cached_results=self._s_partial_results, checkpoint_fn=_periodic_chk)
         self._s_partial_results = {}
+
+        s_json_path = self.log_path.with_name(self.log_path.stem + "_s_screening.json")
+        import json
+        with open(s_json_path, "w", encoding="utf-8") as fh:
+            json.dump(self.s_screening_data, fh, indent=2)
+        self._log(f" Saved S-scatterer screening data to {s_json_path}")
+
         n_acc = sum(len(v) for v in self.s_by_rank.values())
         self._log(f" _screen_s accepted {n_acc}/{len(self.s_candidates)} in {perf_counter() - t0:.2f} s.")
         return self.s_by_rank
@@ -693,7 +731,7 @@ class ss_compass_vqe:
     # ------------------------------------------------------------------
     # Stage 7: final_vqe_runner (Global SS-VQE Optimization & Recovery)
     # ------------------------------------------------------------------
-    def final_vqe_runner(self, log_interval: int = 25, checkpoint_interval: int = 50) -> dict[str, Any]:
+    def final_vqe_runner(self, log_interval: int = 1, checkpoint_interval: int = 50) -> dict[str, Any]:
         stage_start = perf_counter()
         self._log_stage_header("final_vqe_runner")
         self._require("qubit_op", "final_ansatze", "initial_point", "shift")
@@ -716,17 +754,30 @@ class ss_compass_vqe:
             self.latest_params = p_copy
             total_cost = float(cost) + float(np.sum(self.weights)) * e_shift
 
+            raw_e = metadata.get("state_energies")
+            cur_e = (np.asarray(raw_e, dtype=float) + e_shift) if raw_e is not None else None
+
             if total_cost < self.best_cost:
                 self.best_cost = total_cost
                 self.best_params = p_copy.copy()
+                if cur_e is not None:
+                    self.best_state_energies = cur_e.copy()
 
             if step == 1 or step % log_interval == 0:
-                self._log(f"   Eval {step:>6d} | Weighted E = {total_cost:18.12f} Ha | Best = {self.best_cost:18.12f} Ha")
+                e_str = (
+                    "[" + ", ".join(f"{val:.8f}" for val in cur_e) + "]"
+                    if cur_e is not None else "N/A"
+                )
+                self._log(
+                    f"   Eval {step:>5d} | Weighted E = {total_cost:16.10f} Ha | "
+                    f"States = {e_str} | Best = {self.best_cost:16.10f} Ha"
+                )
 
             if step % checkpoint_interval == 0:
-                self.latest_state_energies = state_energies(self.estimator, transpiled, self.qubit_op, p_copy, shift=e_shift)
-                if self.best_params is not None and np.allclose(self.best_params, p_copy):
-                    self.best_state_energies = self.latest_state_energies.copy()
+                self.latest_state_energies = (
+                    cur_e.copy() if cur_e is not None
+                    else state_energies(self.estimator, transpiled, self.qubit_op, p_copy, shift=e_shift)
+                )
                 self.save_checkpoint()
 
         interrupted = {"flag": False, "sig": None}
