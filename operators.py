@@ -125,9 +125,14 @@ def screen_t2_pool(t2_paulis: list[Any], t2_excitations: list[Any], init_states:
     t2_raw.sort(key=lambda x: x[0])
     t2_screen = sorted([(score, idx, theta, energies) for idx, score, theta, energies, _ in t2_raw if score > threshold_t2],
                        key=lambda item: item[0], reverse=True)
-    t2_data = [{"operator_id": idx, "excitation": str(t2_excitations[idx]), "delta_energies": delta.tolist(),
-                "weighted_sum": score, "threshold": float(threshold_t2), "selected": bool(score > threshold_t2),
-                "theta_t2": theta} for idx, score, theta, energies, delta in t2_raw]
+    t2_data = [{"operator_id": idx, "excitation": str(t2_excitations[idx]),
+            "optimal_theta_t2": theta,
+            "optimal_cost": float(np.dot(weights, energies)),
+            "state_energies": energies.tolist(),
+            "delta_energies": delta.tolist(),
+            "screening_score": score, "threshold": float(threshold_t2),
+            "selected": bool(score > threshold_t2)}
+           for idx, score, theta, energies, delta in t2_raw]
     return t2_screen, t2_data
 
 def build_s_candidates(t2_screen: list[tuple[float, int, float, np.ndarray]], t2_excitations: list[Any],
@@ -201,15 +206,19 @@ def screen_s_pool(s_candidates: list[tuple[Any, ...]], t2_paulis: list[Any], sh_
     s_data: list[dict[str, Any]] = []
 
     for cand_idx, rank, t2_idx, s_type, s_idx, theta_t2, _ in s_candidates:
-        score, theta_t2_2p, theta_s_2p, _, delta_energies = s_results[cand_idx]
+        score, theta_t2_2p, theta_s_2p, energies, delta_energies = s_results[cand_idx]
         selected = score > threshold_s
         label = "S-hole" if s_type == "h" else "S-particle"
         s_ex = sh_excitations[s_idx] if s_type == "h" else sp_excitations[s_idx]
 
         s_data.append({"candidate_id": cand_idx, "parent_t2_id": t2_idx, "type": label, "operator_id": s_idx,
-                       "excitation": str(s_ex), "delta_energies": delta_energies.tolist(), "weighted_sum": score,
-                       "threshold": float(threshold_s), "selected": bool(selected), "theta_t2_1p": theta_t2,
-                       "theta_t2_2p": theta_t2_2p, "theta_s_2p": theta_s_2p})
+                    "excitation": str(s_ex),
+                    "optimal_theta_t2_1p": theta_t2, "optimal_theta_t2_2p": theta_t2_2p, "optimal_theta_s_2p": theta_s_2p,
+                    "optimal_cost": float(np.dot(weights, energies)),
+                    "state_energies": energies.tolist(),
+                    "delta_energies": delta_energies.tolist(),
+                    "screening_score": score, "threshold": float(threshold_s),
+                    "selected": bool(selected)})
         if selected:
             s_pauli = sh_paulis[s_idx] if s_type == "h" else sp_paulis[s_idx]
             accepted_by_rank[rank].append((score, s_pauli, s_ex, label, theta_t2_2p, theta_s_2p))

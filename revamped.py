@@ -34,8 +34,9 @@ from ci_utils import (active_hf_determinant,
     projected_hamiltonian,
     rotate_ci_vectors_to_no,
     state_energies)
-from operators import build_operator_pools,build_s_candidates
-from operators import screen_t2_pool,screen_s_pool
+from operators import build_operator_pools, build_s_candidates, screen_s_pool, screen_t2_pool
+from ss_vqe import SS_VQE
+
 warnings.filterwarnings("ignore")
 
 _STAGE_ORDER = ["HF_SOLVER", "initialize_states", "compute_1rdm", "compute_exact_spectrum",
@@ -328,10 +329,9 @@ class ss_compass_vqe:
         if (obj._completed_stage in {"ansatz_assembler", "final_vqe_runner"}
                 and obj.final_op_info and obj.init_states is not None):
             ex_map = {**{("T2", ex): p for ex, p in zip(obj.t2_excitations, obj.t2_paulis)},
-                            **{("S-hole", ex): p for ex, p in zip(obj.sh_excitations, obj.sh_paulis)},
-                            **{("S-particle", ex): p for ex, p in zip(obj.sp_excitations, obj.sp_paulis)},
-                            **{("S-standard", ex): p for ex, p in zip(obj.s_excitations, obj.s_paulis)}}
-            
+                      **{("S-hole", ex): p for ex, p in zip(obj.sh_excitations, obj.sh_paulis)},
+                      **{("S-particle", ex): p for ex, p in zip(obj.sp_excitations, obj.sp_paulis)},
+                      **{("S-standard", ex): p for ex, p in zip(obj.s_excitations, obj.s_paulis)}}
             obj.final_paulis = [ex_map[(info["type"], info["excitation"])] for info in obj.final_op_info]
             obj.final_ansatze = [EvolvedOperatorAnsatz(obj.final_paulis, initial_state=ref) for ref in obj.init_states]
 
@@ -690,7 +690,7 @@ class ss_compass_vqe:
         self._log(f" ansatz_assembler completed in {perf_counter() - stage_start:.2f} s.")
         self.save_checkpoint("ansatz_assembler")
         return self.final_ansatze
-   # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
     # Stage 7: final_vqe_runner (Global SS-VQE Optimization & Recovery)
     # ------------------------------------------------------------------
     def final_vqe_runner(self, log_interval: int = 25, checkpoint_interval: int = 50) -> dict[str, Any]:
@@ -702,7 +702,6 @@ class ss_compass_vqe:
         transpiled = qk_transpile(ansatze, optimization_level=1)
         e_shift = cast(float, self.shift)
 
-        # Resume from best recovered parameters if restarting mid-VQE
         start_pt = (np.asarray(self.best_params, dtype=np.float64)
                     if (self.best_params is not None and len(self.best_params) == len(cast(np.ndarray, self.initial_point)))
                     else np.asarray(self.initial_point, dtype=np.float64))
@@ -730,7 +729,6 @@ class ss_compass_vqe:
                     self.best_state_energies = self.latest_state_energies.copy()
                 self.save_checkpoint()
 
-        # Graceful SIGINT / SIGTERM handling so Ctrl+C or Slurm walltime saves best_params
         interrupted = {"flag": False, "sig": None}
         prev_int, prev_term = signal.getsignal(signal.SIGINT), signal.getsignal(signal.SIGTERM)
 
@@ -776,7 +774,9 @@ class ss_compass_vqe:
         self._log(f" final_vqe_runner completed in {perf_counter() - stage_start:.2f} s ({self.vqe_eval_count} evals).")
         self.save_checkpoint("final_vqe_runner")
         return {"state_energies": self.state_energies, "optimal_params": self.best_params,
-                "best_cost": self.best_cost, "vqe_eval_count": self.vqe_eval_count, "result": self.final_result}
+                "best_cost": self.best_cost, "vqe_eval_count": self.vqe_eval_count,
+                "t2_screening": self.t2_screening_data, "s_screening": self.s_screening_data,
+                "result": self.final_result}
     # ------------------------------------------------------------------
     # End-to-End Pipeline Runner (Supports Fresh & Resumed Runs)
     # ------------------------------------------------------------------

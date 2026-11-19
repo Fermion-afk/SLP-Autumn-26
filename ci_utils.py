@@ -4,6 +4,7 @@ from collections import defaultdict
 from collections.abc import Sequence
 from itertools import combinations
 from typing import Any
+from pyscf import fci
 
 import numpy as np
 from qiskit.circuit import QuantumCircuit
@@ -143,63 +144,62 @@ def state_energies(
     results = estimator.run(pubs).result()
     return np.asarray([float(np.real(r.data.evs)) + shift for r in results], dtype=float)
 
-def build_spin_summed_1rdm(
-    determinants: list[int], state_vec: np.ndarray, n_spatial: int
-) -> np.ndarray:
-    det_idx = {d: i for i, d in enumerate(determinants)}
-    gamma = np.zeros((n_spatial, n_spatial), dtype=complex)
-    for offset in (0, n_spatial):
-        for col, det in enumerate(determinants):
-            c_col = state_vec[col]
-            if abs(c_col) < 1e-15:
-                continue
-            for q in range(n_spatial):
-                q_so = q + offset
-                if not ((det >> q_so) & 1):
-                    continue
-                sign_q = -1 if (det & ((1 << q_so) - 1)).bit_count() % 2 else 1
-                det_ann = det ^ (1 << q_so)
-                for p in range(n_spatial):
-                    p_so = p + offset
-                    if (det_ann >> p_so) & 1:
-                        continue
-                    sign_p = -1 if (det_ann & ((1 << p_so) - 1)).bit_count() % 2 else 1
-                    row = det_idx.get(det_ann | (1 << p_so))
-                    if row is not None:
-                        gamma[p, q] += np.conj(state_vec[row]) * c_col * (sign_p * sign_q)
-    return np.real(0.5 * (gamma + gamma.conj().T))
+def _split_to_pyscf_sectors(dets: list[int], vec: np.ndarray, m: int) -> dict[tuple[int, int], np.ndarray]:
+    """Pack bitstring CI vector into PySCF (na_str, nb_str) sector matrices."""
+    alpha_mask = (1 << m) - 1
+    grouped: dict[tuple[int, int], list[tuple[int, int, complex]]] = defaultdict(list)
+    for det, amp in zip(dets, vec):
+        if abs(amp) > 1e-16:
+            oa, ob = det & alpha_mask, det >> m
+            grouped[(oa.bit_count(), ob.bit_count())].append((oa, ob, amp))
 
+    sectors: dict[tuple[int, int], np.ndarray] = {}
+    for (na, nb), items in grouped.items():
+        civec = np.zeros((fci.cistring.num_strings(m, na), fci.cistring.num_strings(m, nb)), dtype=vec.dtype)
+        for oa, ob, amp in items:
+            civec[fci.cistring.str2addr(m, na, oa), fci.cistring.str2addr(m, nb, ob)] = amp
+        sectors[(na, nb)] = civec
+    return sectors
+
+def build_spin_summed_1rdm(dets: list[int], vec: np.ndarray, m: int) -> np.ndarray:
+    """Spin-summed spatial 1-RDM via PySCF C-compiled fci.direct_spin1.make_rdm1."""
+    gamma = np.zeros((m, m), dtype=float)
+    for (na, nb), civec in _split_to_pyscf_sectors(dets, vec, m).items():
+        if np.iscomplexobj(civec):
+            rdm_re = fci.direct_spin1.make_rdm1(np.ascontiguousarray(np.real(civec)), m, (na, nb))
+            rdm_im = fci.direct_spin1.make_rdm1(np.ascontiguousarray(np.imag(civec)), m, (na, nb))
+            gamma += rdm_re + rdm_im
+        else:
+            gamma += fci.direct_spin1.make_rdm1(np.ascontiguousarray(civec), m, (na, nb))
+    return 0.5 * (gamma + gamma.T)
 
 def rotate_ci_vectors_to_no(
-    determinants: list[int], eigenvectors: np.ndarray, u_mat: np.ndarray, n_spatial: int
+    dets: list[int], evecs: np.ndarray, u: np.ndarray, m: int, tol: float = 1e-12
 ) -> tuple[list[int], np.ndarray]:
-    alpha_mask = (1 << n_spatial) - 1
-    mo_by_sector: dict[tuple[int, int], list[tuple[int, np.ndarray]]] = defaultdict(list)
-    for idx, det in enumerate(determinants):
-        mo_by_sector[((det & alpha_mask).bit_count(), (det >> n_spatial).bit_count())].append(
-            (det, eigenvectors[idx, :])
-        )
+    """Transform CI eigenvectors into NO basis via PySCF fci.addons.transform_ci_for_orbital_rotation."""
+    n_roots = evecs.shape[1]
+    u_c = np.ascontiguousarray(u, dtype=float)
+    rot_maps: list[dict[int, complex]] = [defaultdict(complex) for _ in range(n_roots)]
 
-    no_amplitudes: dict[int, np.ndarray] = {}
-    for (na, nb), entries in mo_by_sector.items():
-        mo_a = [tuple(p for p in range(n_spatial) if (d >> p) & 1) for d, _ in entries]
-        mo_b = [tuple(p for p in range(n_spatial) if (d >> (p + n_spatial)) & 1) for d, _ in entries]
-        mo_vecs = np.asarray([vec for _, vec in entries], dtype=complex)
-        no_a_list, no_b_list = list(combinations(range(n_spatial), na)), list(combinations(range(n_spatial), nb))
+    for k in range(n_roots):
+        for (na, nb), civec in _split_to_pyscf_sectors(dets, evecs[:, k], m).items():
+            if np.iscomplexobj(civec):
+                rot_ci = (fci.addons.transform_ci_for_orbital_rotation(np.ascontiguousarray(np.real(civec)), m, (na, nb), u_c)
+                          + 1j * fci.addons.transform_ci_for_orbital_rotation(np.ascontiguousarray(np.imag(civec)), m, (na, nb), u_c))
+            else:
+                rot_ci = fci.addons.transform_ci_for_orbital_rotation(np.ascontiguousarray(civec), m, (na, nb), u_c)
 
-        ov_a = np.array([[np.linalg.det(u_mat[np.ix_(ia, pa)]) if na > 0 else 1.0 for pa in no_a_list] for ia in mo_a], dtype=complex)
-        ov_b = np.array([[np.linalg.det(u_mat[np.ix_(ib, pb)]) if nb > 0 else 1.0 for pb in no_b_list] for ib in mo_b], dtype=complex)
-        coeff_tensor = np.einsum("ma,mb,mk->abk", ov_a, ov_b, mo_vecs, optimize=True)
+            strs_a = fci.cistring.gen_strings4orblist(range(m), na)
+            strs_b = fci.cistring.gen_strings4orblist(range(m), nb)
+            nz_a, nz_b = np.where(np.abs(rot_ci) > tol)
+            for ia, ib in zip(nz_a, nz_b):
+                det_no = int(strs_a[ia]) | (int(strs_b[ib]) << m)
+                rot_maps[k][det_no] += complex(rot_ci[ia, ib])
 
-        for ia, pa in enumerate(no_a_list):
-            det_a = sum(1 << p for p in pa)
-            for ib, pb in enumerate(no_b_list):
-                c_vec = coeff_tensor[ia, ib]
-                if np.max(np.abs(c_vec)) > 1e-12:
-                    no_amplitudes[det_a | sum(1 << (p + n_spatial) for p in pb)] = c_vec
-
-    no_dets = sorted(no_amplitudes.keys())
-    no_vecs = np.vstack([no_amplitudes[d] for d in no_dets])
-    for col in range(no_vecs.shape[1]):
-        no_vecs[:, col] /= np.linalg.norm(no_vecs[:, col])
-    return no_dets, no_vecs
+    no_dets = sorted({det for rm in rot_maps for det in rm})
+    det_idx = {det: i for i, det in enumerate(no_dets)}
+    no_evecs = np.zeros((len(no_dets), n_roots), dtype=evecs.dtype)
+    for k, rm in enumerate(rot_maps):
+        for det, amp in rm.items():
+            no_evecs[det_idx[det], k] = amp if np.iscomplexobj(no_evecs) else float(np.real(amp))
+    return no_dets, no_evecs
