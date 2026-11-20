@@ -10,13 +10,13 @@ def main() -> None:
         spin=1,
         charge=0,
         basis_set="sto-3g",
-        weights=[100, 100, 1],
+        weights=[50/101, 50/101, 1/101],
         screening_weights=[1 / 52, 1 / 52, 50 / 52],
         no_init_states=3,
         threshold=[1e-5, 1e-6],
         nfc=False,
         occ_threshold=1.99,
-        virt_threshold=0.01,
+        virt_threshold=0.1,
         log_file="beh_eq.log",
     )
 
