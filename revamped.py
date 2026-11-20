@@ -20,9 +20,11 @@ from qiskit.circuit import QuantumCircuit
 from qiskit.circuit.library import EvolvedOperatorAnsatz
 from qiskit.primitives import StatevectorEstimator
 from qiskit_algorithms.optimizers import L_BFGS_B
+from qiskit_nature.second_q.circuit.library import UCC
 from qiskit_nature.second_q.drivers import MethodType, PySCFDriver
 from qiskit_nature.second_q.hamiltonians import ElectronicEnergy
 from qiskit_nature.second_q.mappers import JordanWignerMapper
+from qiskit_nature.second_q.operators import FermionicOp
 from qiskit_nature.second_q.problems import ElectronicStructureProblem
 from qiskit_nature.second_q.transformers import FreezeCoreTransformer
 
@@ -178,27 +180,27 @@ class ss_compass_vqe:
     # Gaussian-Style Logging & Atomic Checkpointing
     # ------------------------------------------------------------------
     def _ensure_log(self, append: bool = False) -> None:
-        if self._log_fh is not None and not self._log_fh.closed:
-            return
-        mode = "a" if append and self.log_path.exists() else "w"
-        self._log_fh = open(self.log_path, mode, encoding="utf-8", buffering=1)
-        if mode == "w":
-            now = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
-            scf_tag = "RHF" if self.spin == 0 else "ROHF"
-            self._log("*" * 74)
-            self._log(" SS-COMPASS-VQE  |  Subspace-Search Commutativity-Screened VQE")
-            self._log(f" Run started: {now}  |  Workers: {self.n_workers}")
-            self._log("*" * 74)
-            self._log("-" * 74)
-            self._log(f" # {scf_tag}/{self.basis_set}  NFC={self.nfc}  NIS={self.no_init_states}  "
-                      f"Thresh=({self.threshold[0]:.2e}, {self.threshold[1]:.2e})")
-            self._log(f"   NOON_Cutoffs = ({self.occ_threshold:.2f}, {self.virt_threshold:.2f})")
-            self._log(f"   Weights      = {np.array2string(self.weights, precision=6)}")
-            self._log(f"   Scr_Weights  = {np.array2string(self.screening_weights, precision=6)}")
-            self._log("-" * 74)
-            self._log(f" Charge = {self.charge:2d}   Multiplicity = {self.spin + 1} (2S = {self.spin})")
-            self._log(f" Checkpoint file: {self.chk_path}")
-            self._log("-" * 74)
+            if self._log_fh is not None and not self._log_fh.closed:
+                return
+            mode = "a" if append and self.log_path.exists() else "w"
+            self._log_fh = open(self.log_path, mode, encoding="utf-8", buffering=1)
+            if mode == "w":
+                now = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
+                scf_tag = "RHF" if self.spin == 0 else "ROHF"
+                self._log("*" * 74)
+                self._log(" SS-COMPASS-VQE  |  Subspace-Search Commutativity-Screened VQE")
+                self._log(f" Run started: {now}  |  Workers: {self.n_workers}")
+                self._log("*" * 74)
+                self._log("-" * 74)
+                self._log(f" # {scf_tag}/{self.basis_set}  NFC={self.nfc}  NIS={self.no_init_states}  "
+                          f"Thresh=({self.threshold[0]:.2e}, {self.threshold[1]:.2e})")
+                self._log(f"   NOON_Cutoffs = ({self.occ_threshold:.2f}, {self.virt_threshold:.2f})")
+                self._log(f"   Weights      = {np.array2string(self.weights, precision=6)}")
+                self._log(f"   Scr_Weights  = {np.array2string(self.screening_weights, precision=6)}")
+                self._log("-" * 74)
+                self._log(f" Charge = {self.charge:2d}   Multiplicity = {self.spin + 1} (2S = {self.spin})")
+                self._log(f" Checkpoint file: {self.chk_path}")
+                self._log("-" * 74)
 
     def _log(self, line: str = "", also_stdout: bool = True) -> None:
         self._ensure_log(append=True)
@@ -332,7 +334,21 @@ class ss_compass_vqe:
                       **{("S-hole", ex): p for ex, p in zip(obj.sh_excitations, obj.sh_paulis)},
                       **{("S-particle", ex): p for ex, p in zip(obj.sp_excitations, obj.sp_paulis)},
                       **{("S-standard", ex): p for ex, p in zip(obj.s_excitations, obj.s_paulis)}}
-            obj.final_paulis = [ex_map[(info["type"], info["excitation"])] for info in obj.final_op_info]
+            def _resolve_pauli(info: dict):
+                key = (info["type"], info["excitation"])
+                if key in ex_map:
+                    return ex_map[key]
+                exc = info["excitation"]
+                initial_state = obj.init_states[0] if obj.init_states else None
+                ucc_tmp = UCC(
+                    num_particles=obj.num_particles,
+                    num_spatial_orbitals=obj.num_spatial_orbitals,
+                    excitations=lambda *_, **__: [exc],
+                    initial_state=initial_state,
+                    qubit_mapper=obj.mapper,
+                )
+                return obj.mapper.map(cast(FermionicOp, ucc_tmp.excitation_ops()[0]))
+            obj.final_paulis = [_resolve_pauli(info) for info in obj.final_op_info]
             obj.final_ansatze = [EvolvedOperatorAnsatz(obj.final_paulis, initial_state=ref) for ref in obj.init_states]
 
         now = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
@@ -731,7 +747,7 @@ class ss_compass_vqe:
     # ------------------------------------------------------------------
     # Stage 7: final_vqe_runner (Global SS-VQE Optimization & Recovery)
     # ------------------------------------------------------------------
-    def final_vqe_runner(self, log_interval: int = 1, checkpoint_interval: int = 50) -> dict[str, Any]:
+    def final_vqe_runner(self, log_interval: int = 1, checkpoint_interval: int = 1) -> dict[str, Any]:
         stage_start = perf_counter()
         self._log_stage_header("final_vqe_runner")
         self._require("qubit_op", "final_ansatze", "initial_point", "shift")
@@ -757,7 +773,8 @@ class ss_compass_vqe:
             raw_e = metadata.get("state_energies")
             cur_e = (np.asarray(raw_e, dtype=float) + e_shift) if raw_e is not None else None
 
-            if total_cost < self.best_cost:
+            improved = total_cost < self.best_cost
+            if improved:
                 self.best_cost = total_cost
                 self.best_params = p_copy.copy()
                 if cur_e is not None:
@@ -773,7 +790,7 @@ class ss_compass_vqe:
                     f"States = {e_str} | Best = {self.best_cost:16.10f} Ha"
                 )
 
-            if step % checkpoint_interval == 0:
+            if improved or (checkpoint_interval > 0 and step % checkpoint_interval == 0):
                 self.latest_state_energies = (
                     cur_e.copy() if cur_e is not None
                     else state_energies(self.estimator, transpiled, self.qubit_op, p_copy, shift=e_shift)
