@@ -15,6 +15,8 @@ def main() -> None:
         no_init_states=3,
         threshold=[1e-5, 1e-6],
         nfc=False,
+        occ_threshold=1.99,
+        virt_threshold=0.01,
         log_file="bh_eq.log",
     )
 

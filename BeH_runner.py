@@ -16,7 +16,7 @@ def main() -> None:
         threshold=[1e-5, 1e-6],
         nfc=False,
         occ_threshold=1.99,
-        virt_threshold=0.2,
+        virt_threshold=0.01,
         log_file="beh_eq.log",
     )
 
