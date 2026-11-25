@@ -1,0 +1,1883 @@
+[
+  {
+    "operator_id": 0,
+    "excitation": "((0, 1), (3, 4))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 1,
+    "excitation": "((0, 1), (3, 5))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 2,
+    "excitation": "((0, 1), (4, 5))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 3,
+    "excitation": "((0, 2), (3, 4))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 4,
+    "excitation": "((0, 2), (3, 5))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 5,
+    "excitation": "((0, 2), (4, 5))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 6,
+    "excitation": "((0, 6), (3, 9))",
+    "optimal_theta_t2": -0.04242444008928238,
+    "optimal_cost": -24.753594442651405,
+    "state_energies": [
+      -24.754902575965236,
+      -24.747921561023617,
+      -24.746185991140887
+    ],
+    "delta_energies": [
+      -0.002122319340152501,
+      -0.001792887965549994,
+      -5.7318083129587194e-05
+    ],
+    "screening_score": 0.0009369566512290253,
+    "threshold": 1e-05,
+    "selected": true
+  },
+  {
+    "operator_id": 7,
+    "excitation": "((0, 6), (3, 10))",
+    "optimal_theta_t2": -0.00038683517482965475,
+    "optimal_cost": -24.751671809240527,
+    "state_energies": [
+      -24.75278008901606,
+      -24.746132237955305,
+      -24.746128582770435
+    ],
+    "delta_energies": [
+      1.6760902354917562e-07,
+      -3.564897237851028e-06,
+      9.028732250726534e-08
+    ],
+    "screening_score": 1.8111568023907311e-06,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 8,
+    "excitation": "((0, 6), (3, 11))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 9,
+    "excitation": "((0, 6), (4, 9))",
+    "optimal_theta_t2": -0.00036543519433365214,
+    "optimal_cost": -24.751671800949254,
+    "state_energies": [
+      -24.7527801070476,
+      -24.74613194843141,
+      -24.746128592483633
+    ],
+    "delta_energies": [
+      1.4957748462052223e-07,
+      -3.2753733449908395e-06,
+      8.057412514972384e-08
+    ],
+    "screening_score": 1.6628410989272148e-06,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 10,
+    "excitation": "((0, 6), (4, 10))",
+    "optimal_theta_t2": -0.04247282249580344,
+    "optimal_cost": -24.75365476160478,
+    "state_energies": [
+      -24.754902557388366,
+      -24.746547924699577,
+      -24.748283640674096
+    ],
+    "delta_energies": [
+      -0.0021223007632826807,
+      -0.0004192516415102432,
+      -0.002154967616338155
+    ],
+    "screening_score": 0.001295378848076263,
+    "threshold": 1e-05,
+    "selected": true
+  },
+  {
+    "operator_id": 11,
+    "excitation": "((0, 6), (4, 11))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 12,
+    "excitation": "((0, 6), (5, 9))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 13,
+    "excitation": "((0, 6), (5, 10))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 14,
+    "excitation": "((0, 6), (5, 11))",
+    "optimal_theta_t2": -0.07924507169658612,
+    "optimal_cost": -24.76228909590678,
+    "state_energies": [
+      -24.763381205509702,
+      -24.756828547892315,
+      -24.75682854789202
+    ],
+    "delta_energies": [
+      -0.010600948884619044,
+      -0.01069987483424839,
+      -0.010699874834262602
+    ],
+    "screening_score": 0.01069889536940761,
+    "threshold": 1e-05,
+    "selected": true
+  },
+  {
+    "operator_id": 15,
+    "excitation": "((0, 7), (3, 9))",
+    "optimal_theta_t2": 0.002289324506600689,
+    "optimal_cost": -24.751706176940093,
+    "state_energies": [
+      -24.752818460921635,
+      -24.746159846304163,
+      -24.746129667760595
+    ],
+    "delta_energies": [
+      -3.8204296551214156e-05,
+      -3.1173246096471985e-05,
+      -9.94702837431305e-07
+    ],
+    "screening_score": 1.630298755689484e-05,
+    "threshold": 1e-05,
+    "selected": true
+  },
+  {
+    "operator_id": 16,
+    "excitation": "((0, 7), (3, 10))",
+    "optimal_theta_t2": 2.0002702948184053e-05,
+    "optimal_cost": -24.751671661943632,
+    "state_energies": [
+      -24.752780253730823,
+      -24.74612873442222,
+      -24.74612867159316
+    ],
+    "delta_energies": [
+      2.8942608309989737e-09,
+      -6.1364154646526e-08,
+      1.464599108658149e-09
+    ],
+    "screening_score": 3.1131999490992144e-08,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 17,
+    "excitation": "((0, 7), (3, 11))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 18,
+    "excitation": "((0, 7), (4, 9))",
+    "optimal_theta_t2": 1.889989591326421e-05,
+    "optimal_cost": -24.751671661801396,
+    "state_energies": [
+      -24.752780254041156,
+      -24.74612872945998,
+      -24.746128671745236
+    ],
+    "delta_energies": [
+      2.583927738442071e-09,
+      -5.640191247380244e-08,
+      1.3125216469234147e-09
+    ],
+    "screening_score": 2.8597085482918165e-08,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 19,
+    "excitation": "((0, 7), (4, 10))",
+    "optimal_theta_t2": 0.002289370349051899,
+    "optimal_cost": -24.7517072198883,
+    "state_energies": [
+      -24.752818460920828,
+      -24.746135962045475,
+      -24.74616606740585
+    ],
+    "delta_energies": [
+      -3.820429574474815e-05,
+      -7.288987408315961e-06,
+      -3.7394348090913354e-05
+    ],
+    "screening_score": 2.2498723472338753e-05,
+    "threshold": 1e-05,
+    "selected": true
+  },
+  {
+    "operator_id": 20,
+    "excitation": "((0, 7), (4, 11))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 21,
+    "excitation": "((0, 7), (5, 9))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 22,
+    "excitation": "((0, 7), (5, 10))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 23,
+    "excitation": "((0, 7), (5, 11))",
+    "optimal_theta_t2": 0.0004272728936122054,
+    "optimal_cost": -24.75167314473009,
+    "state_energies": [
+      -24.752781741744705,
+      -24.74613016093183,
+      -24.746130158382183
+    ],
+    "delta_energies": [
+      -1.485119621946751e-06,
+      -1.4878737637502581e-06,
+      -1.4853244252321929e-06
+    ],
+    "screening_score": 1.486584446248211e-06,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 24,
+    "excitation": "((0, 8), (3, 9))",
+    "optimal_theta_t2": -0.0770166937503565,
+    "optimal_cost": -24.754591066673665,
+    "state_energies": [
+      -24.75606468479957,
+      -24.748286639560057,
+      -24.74615931252822
+    ],
+    "delta_energies": [
+      -0.0032844281744850434,
+      -0.0021579665019899608,
+      -3.063947046300086e-05
+    ],
+    "screening_score": 0.001115987394031021,
+    "threshold": 1e-05,
+    "selected": true
+  },
+  {
+    "operator_id": 25,
+    "excitation": "((0, 8), (3, 10))",
+    "optimal_theta_t2": -0.0008066901734083292,
+    "optimal_cost": -24.751671920718728,
+    "state_energies": [
+      -24.752779951438168,
+      -24.74613486698102,
+      -24.746128667262035
+    ],
+    "delta_energies": [
+      3.0518691573888646e-07,
+      -6.193922953201536e-06,
+      5.795723012624876e-09
+    ],
+    "screening_score": 3.072189314123237e-06,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 26,
+    "excitation": "((0, 8), (3, 11))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 27,
+    "excitation": "((0, 8), (4, 9))",
+    "optimal_theta_t2": -0.0007016299129048039,
+    "optimal_cost": -24.751671886680864,
+    "state_energies": [
+      -24.7527800257545,
+      -24.746133874392847,
+      -24.74612850823252
+    ],
+    "delta_energies": [
+      2.3087058309556596e-07,
+      -5.201334779769695e-06,
+      1.6482523790273262e-07
+    ],
+    "screening_score": 2.658800707591257e-06,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 28,
+    "excitation": "((0, 8), (4, 10))",
+    "optimal_theta_t2": -0.07689028679072117,
+    "optimal_cost": -24.754546725962836,
+    "state_energies": [
+      -24.756064520019184,
+      -24.746633607300534,
+      -24.747281904061644
+    ],
+    "delta_energies": [
+      -0.003284263394100151,
+      -0.0005049342424676695,
+      -0.0011532310038866456
+    ],
+    "screening_score": 0.0008533913436813455,
+    "threshold": 1e-05,
+    "selected": true
+  },
+  {
+    "operator_id": 29,
+    "excitation": "((0, 8), (4, 11))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 30,
+    "excitation": "((0, 8), (5, 9))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 31,
+    "excitation": "((0, 8), (5, 10))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 32,
+    "excitation": "((0, 8), (5, 11))",
+    "optimal_theta_t2": 0.034086314445293545,
+    "optimal_cost": -24.75320621872062,
+    "state_energies": [
+      -24.754405154233098,
+      -24.747591924145905,
+      -24.746831158170558
+    ],
+    "delta_energies": [
+      -0.0016248976080142086,
+      -0.0014632510878378469,
+      -0.000702485112800133
+    ],
+    "screening_score": 0.0010882347291080515,
+    "threshold": 1e-05,
+    "selected": true
+  },
+  {
+    "operator_id": 33,
+    "excitation": "((1, 2), (3, 4))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 34,
+    "excitation": "((1, 2), (3, 5))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 35,
+    "excitation": "((1, 2), (4, 5))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 36,
+    "excitation": "((1, 6), (3, 9))",
+    "optimal_theta_t2": 0.0022886690066229293,
+    "optimal_cost": -24.75170616705669,
+    "state_energies": [
+      -24.75281846092981,
+      -24.74615972762407,
+      -24.74612966775807
+    ],
+    "delta_energies": [
+      -3.820430472600833e-05,
+      -3.105456600493994e-05,
+      -9.947003114518793e-07
+    ],
+    "screening_score": 1.6244233866788113e-05,
+    "threshold": 1e-05,
+    "selected": true
+  },
+  {
+    "operator_id": 37,
+    "excitation": "((1, 6), (3, 10))",
+    "optimal_theta_t2": 1.9997743962307675e-05,
+    "optimal_cost": -24.751671661942975,
+    "state_energies": [
+      -24.752780253732237,
+      -24.74612873440502,
+      -24.74612867158831
+    ],
+    "delta_energies": [
+      2.892846850954811e-09,
+      -6.134695240689325e-08,
+      1.4694485628297116e-09
+    ],
+    "screening_score": 3.112587025086241e-08,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 38,
+    "excitation": "((1, 6), (3, 11))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 39,
+    "excitation": "((1, 6), (4, 9))",
+    "optimal_theta_t2": 1.889787830759236e-05,
+    "optimal_cost": -24.751671661801137,
+    "state_energies": [
+      -24.752780254041706,
+      -24.7461287294461,
+      -24.746128671750487
+    ],
+    "delta_energies": [
+      2.583377067821857e-09,
+      -5.6388032021459367e-08,
+      1.3072707361061475e-09
+    ],
+    "screening_score": 2.8587609058872256e-08,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 40,
+    "excitation": "((1, 6), (4, 10))",
+    "optimal_theta_t2": 0.002289221532202456,
+    "optimal_cost": -24.751707217576737,
+    "state_energies": [
+      -24.752818460923333,
+      -24.746135934302636,
+      -24.746166067384905
+    ],
+    "delta_energies": [
+      -3.8204298249411295e-05,
+      -7.261244569178871e-06,
+      -3.739432714766622e-05
+    ],
+    "screening_score": 2.2484979050412533e-05,
+    "threshold": 1e-05,
+    "selected": true
+  },
+  {
+    "operator_id": 41,
+    "excitation": "((1, 6), (4, 11))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 42,
+    "excitation": "((1, 6), (5, 9))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 43,
+    "excitation": "((1, 6), (5, 10))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 44,
+    "excitation": "((1, 6), (5, 11))",
+    "optimal_theta_t2": 0.0004271507057129981,
+    "optimal_cost": -24.751673144305308,
+    "state_energies": [
+      -24.752781741744723,
+      -24.746130155834454,
+      -24.746130158382048
+    ],
+    "delta_energies": [
+      -1.4851196397103195e-06,
+      -1.482776387007334e-06,
+      -1.485324290229073e-06
+    ],
+    "screening_score": 1.4840609257577293e-06,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 45,
+    "excitation": "((1, 7), (3, 9))",
+    "optimal_theta_t2": -0.0013657852460489271,
+    "optimal_cost": -24.75169822802036,
+    "state_energies": [
+      -24.75280967522656,
+      -24.746152547657324,
+      -24.746129436321425
+    ],
+    "delta_energies": [
+      -2.9418601474873185e-05,
+      -2.3874599257567297e-05,
+      -7.632636673804427e-07
+    ],
+    "screening_score": 1.2488235125962972e-05,
+    "threshold": 1e-05,
+    "selected": true
+  },
+  {
+    "operator_id": 46,
+    "excitation": "((1, 7), (3, 10))",
+    "optimal_theta_t2": -1.1884903697064121e-05,
+    "optimal_cost": -24.75167166134149,
+    "state_energies": [
+      -24.752780254405927,
+      -24.74612872009862,
+      -24.746128671940003
+    ],
+    "delta_energies": [
+      2.2191564141849085e-09,
+      -4.7040554562727266e-08,
+      1.1177547776242136e-09
+    ],
+    "screening_score": 2.38627190438788e-08,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 47,
+    "excitation": "((1, 7), (3, 11))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 48,
+    "excitation": "((1, 7), (4, 9))",
+    "optimal_theta_t2": -1.1230955414044692e-05,
+    "optimal_cost": -24.751671661232677,
+    "state_energies": [
+      -24.75278025464342,
+      -24.746128716298305,
+      -24.746128672059623
+    ],
+    "delta_energies": [
+      1.9816646101844526e-09,
+      -4.324023805679644e-08,
+      9.981349080590007e-10
+    ],
+    "screening_score": 2.1919805077752047e-08,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 49,
+    "excitation": "((1, 7), (4, 10))",
+    "optimal_theta_t2": -0.0013658334617682834,
+    "optimal_cost": -24.75169903121022,
+    "state_energies": [
+      -24.752809675226313,
+      -24.74613425546115,
+      -24.746157366798347
+    ],
+    "delta_energies": [
+      -2.941860122973594e-05,
+      -5.582403083792542e-06,
+      -2.869374058889207e-05
+    ],
+    "screening_score": 1.7259661236276896e-05,
+    "threshold": 1e-05,
+    "selected": true
+  },
+  {
+    "operator_id": 50,
+    "excitation": "((1, 7), (4, 11))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 51,
+    "excitation": "((1, 7), (5, 9))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 52,
+    "excitation": "((1, 7), (5, 10))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 53,
+    "excitation": "((1, 7), (5, 11))",
+    "optimal_theta_t2": -0.001696329087819986,
+    "optimal_cost": -24.751720477397072,
+    "state_energies": [
+      -24.752829081153372,
+      -24.746177458615705,
+      -24.74617745861543
+    ],
+    "delta_energies": [
+      -4.882452828880446e-05,
+      -4.8785557638098e-05,
+      -4.8785557673625135e-05
+    ],
+    "screening_score": 4.878594350371248e-05,
+    "threshold": 1e-05,
+    "selected": true
+  },
+  {
+    "operator_id": 54,
+    "excitation": "((1, 8), (3, 9))",
+    "optimal_theta_t2": 0.0029237855330820767,
+    "optimal_cost": -24.751725788346178,
+    "state_energies": [
+      -24.75284035681958,
+      -24.746176457459928,
+      -24.74612943449838
+    ],
+    "delta_energies": [
+      -6.0100194495760206e-05,
+      -4.778440186115063e-05,
+      -7.614406207778757e-07
+    ],
+    "screening_score": 2.4627646718734507e-05,
+    "threshold": 1e-05,
+    "selected": true
+  },
+  {
+    "operator_id": 55,
+    "excitation": "((1, 8), (3, 10))",
+    "optimal_theta_t2": 2.6829123422453837e-05,
+    "optimal_cost": -24.751671663617575,
+    "state_energies": [
+      -24.752780251624824,
+      -24.746128774171734,
+      -24.74612867299094
+    ],
+    "delta_energies": [
+      5.0002597618004074e-09,
+      -1.0111366677278966e-07,
+      6.681588615720102e-11
+    ],
+    "screening_score": 5.0138855373357856e-08,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 56,
+    "excitation": "((1, 8), (3, 11))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 57,
+    "excitation": "((1, 8), (4, 9))",
+    "optimal_theta_t2": 2.4160410171734047e-05,
+    "optimal_cost": -24.751671663194443,
+    "state_energies": [
+      -24.752780252570087,
+      -24.746128761611725,
+      -24.7461286710207
+    ],
+    "delta_energies": [
+      4.054996338709316e-09,
+      -8.855365862814324e-08,
+      2.03705852186431e-09
+    ],
+    "screening_score": 4.488703815682265e-08,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 58,
+    "excitation": "((1, 8), (4, 10))",
+    "optimal_theta_t2": 0.0029240947308002614,
+    "optimal_cost": -24.751725059379798,
+    "state_energies": [
+      -24.752840356837307,
+      -24.746139846052145,
+      -24.746157298132363
+    ],
+    "delta_energies": [
+      -6.0100212223801464e-05,
+      -1.1172994078378906e-05,
+      -2.862507460577035e-05
+    ],
+    "screening_score": 2.029706580625014e-05,
+    "threshold": 1e-05,
+    "selected": true
+  },
+  {
+    "operator_id": 59,
+    "excitation": "((1, 8), (4, 11))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 60,
+    "excitation": "((1, 8), (5, 9))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 61,
+    "excitation": "((1, 8), (5, 10))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 62,
+    "excitation": "((1, 8), (5, 11))",
+    "optimal_theta_t2": 0.0014315496754844803,
+    "optimal_cost": -24.75168777166377,
+    "state_energies": [
+      -24.75279711623498,
+      -24.746145188773298,
+      -24.746136908842132
+    ],
+    "delta_energies": [
+      -1.6859609896613392e-05,
+      -1.6515715230980277e-05,
+      -8.235784374477362e-06
+    ],
+    "screening_score": 1.2420144457123717e-05,
+    "threshold": 1e-05,
+    "selected": true
+  },
+  {
+    "operator_id": 63,
+    "excitation": "((2, 6), (3, 9))",
+    "optimal_theta_t2": -0.07813412051860122,
+    "optimal_cost": -24.754411797720493,
+    "state_energies": [
+      -24.756065392560362,
+      -24.746128673058067,
+      -24.746158973984212
+    ],
+    "delta_energies": [
+      -0.0032851359352790155,
+      0.0,
+      -3.030092645417426e-05
+    ],
+    "screening_score": 4.752655700977949e-05,
+    "threshold": 1e-05,
+    "selected": true
+  },
+  {
+    "operator_id": 64,
+    "excitation": "((2, 6), (3, 10))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 65,
+    "excitation": "((2, 6), (3, 11))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 66,
+    "excitation": "((2, 6), (4, 9))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 67,
+    "excitation": "((2, 6), (4, 10))",
+    "optimal_theta_t2": -0.07713388817051915,
+    "optimal_cost": -24.75450467642422,
+    "state_energies": [
+      -24.756064822188527,
+      -24.746128673058067,
+      -24.747279222147263
+    ],
+    "delta_energies": [
+      -0.0032845655634439197,
+      0.0,
+      -0.0011505490895054038
+    ],
+    "screening_score": 0.0006020992083041001,
+    "threshold": 1e-05,
+    "selected": true
+  },
+  {
+    "operator_id": 68,
+    "excitation": "((2, 6), (4, 11))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 69,
+    "excitation": "((2, 6), (5, 9))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 70,
+    "excitation": "((2, 6), (5, 10))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 71,
+    "excitation": "((2, 6), (5, 11))",
+    "optimal_theta_t2": 0.034368232149235595,
+    "optimal_cost": -24.75308437622502,
+    "state_energies": [
+      -24.75440543681461,
+      -24.746128673058067,
+      -24.74682947349601
+    ],
+    "delta_energies": [
+      -0.0016251801895279527,
+      0.0,
+      -0.0007008004382527133
+    ],
+    "screening_score": 0.000363021802991719,
+    "threshold": 1e-05,
+    "selected": true
+  },
+  {
+    "operator_id": 72,
+    "excitation": "((2, 7), (3, 9))",
+    "optimal_theta_t2": 0.0029279542158825557,
+    "optimal_cost": -24.75172180641417,
+    "state_energies": [
+      -24.752840356946102,
+      -24.746128673058067,
+      -24.74612943445095
+    ],
+    "delta_energies": [
+      -6.010032101855245e-05,
+      0.0,
+      -7.613931920502637e-07
+    ],
+    "screening_score": 9.719800061491647e-07,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 73,
+    "excitation": "((2, 7), (3, 10))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 74,
+    "excitation": "((2, 7), (3, 11))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 75,
+    "excitation": "((2, 7), (4, 9))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 76,
+    "excitation": "((2, 7), (4, 10))",
+    "optimal_theta_t2": 0.002925030153941052,
+    "optimal_cost": -24.75172412830228,
+    "state_energies": [
+      -24.75284035688284,
+      -24.746128673058067,
+      -24.74615729774089
+    ],
+    "delta_energies": [
+      -6.010025775537997e-05,
+      0.0,
+      -2.8624683132250084e-05
+    ],
+    "screening_score": 1.476568727096915e-05,
+    "threshold": 1e-05,
+    "selected": true
+  },
+  {
+    "operator_id": 77,
+    "excitation": "((2, 7), (4, 11))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 78,
+    "excitation": "((2, 7), (5, 9))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 79,
+    "excitation": "((2, 7), (5, 10))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 80,
+    "excitation": "((2, 7), (5, 11))",
+    "optimal_theta_t2": 0.0014339631255137772,
+    "optimal_cost": -24.751686395395886,
+    "state_energies": [
+      -24.752797116345015,
+      -24.746128673058067,
+      -24.746136908242384
+    ],
+    "delta_energies": [
+      -1.6859719931261452e-05,
+      0.0,
+      -8.235184626670389e-06
+    ],
+    "screening_score": 4.243751992720603e-06,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 81,
+    "excitation": "((2, 8), (3, 9))",
+    "optimal_theta_t2": -0.22475479620172042,
+    "optimal_cost": -24.765636496694963,
+    "state_energies": [
+      -24.769538061422374,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      -0.016757804797290277,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.00016591885937911166,
+    "threshold": 1e-05,
+    "selected": true
+  },
+  {
+    "operator_id": 82,
+    "excitation": "((2, 8), (3, 10))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 83,
+    "excitation": "((2, 8), (3, 11))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 84,
+    "excitation": "((2, 8), (4, 9))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 85,
+    "excitation": "((2, 8), (4, 10))",
+    "optimal_theta_t2": -0.224754796201736,
+    "optimal_cost": -24.765636496694942,
+    "state_energies": [
+      -24.76953806142235,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      -0.016757804797265408,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0001659188593788654,
+    "threshold": 1e-05,
+    "selected": true
+  },
+  {
+    "operator_id": 86,
+    "excitation": "((2, 8), (4, 11))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 87,
+    "excitation": "((2, 8), (5, 9))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 88,
+    "excitation": "((2, 8), (5, 10))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 89,
+    "excitation": "((2, 8), (5, 11))",
+    "optimal_theta_t2": -0.04377689348150307,
+    "optimal_cost": -24.754006610986416,
+    "state_energies": [
+      -24.755582198572117,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      -0.0028019419470339813,
+      0.0,
+      0.0
+    ],
+    "screening_score": 2.7741999475583972e-05,
+    "threshold": 1e-05,
+    "selected": true
+  },
+  {
+    "operator_id": 90,
+    "excitation": "((6, 7), (9, 10))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 91,
+    "excitation": "((6, 7), (9, 11))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 92,
+    "excitation": "((6, 7), (10, 11))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 93,
+    "excitation": "((6, 8), (9, 10))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 94,
+    "excitation": "((6, 8), (9, 11))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 95,
+    "excitation": "((6, 8), (10, 11))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 96,
+    "excitation": "((7, 8), (9, 10))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 97,
+    "excitation": "((7, 8), (9, 11))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  },
+  {
+    "operator_id": 98,
+    "excitation": "((7, 8), (10, 11))",
+    "optimal_theta_t2": 0.0,
+    "optimal_cost": -24.75167165936389,
+    "state_energies": [
+      -24.752780256625083,
+      -24.746128673058067,
+      -24.746128673057758
+    ],
+    "delta_energies": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "screening_score": 0.0,
+    "threshold": 1e-05,
+    "selected": false
+  }
+]
